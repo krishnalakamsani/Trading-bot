@@ -109,20 +109,40 @@ def get_config() -> dict:
     index_config = get_index_config(config['selected_index'])
     
     return {
-        "order_qty": config['order_qty'],
-        "max_trades_per_day": config['max_trades_per_day'],
-        "daily_max_loss": config['daily_max_loss'],
-        "trail_start_profit": config['trail_start_profit'],
-        "trail_step": config['trail_step'],
-        "trailing_sl_distance": config['trailing_sl_distance'],
-        "target_points": config['target_points'],
+        # API Settings
         "has_credentials": bool(config['dhan_access_token'] and config['dhan_client_id']),
         "mode": bot_state['mode'],
+        # Index & Timeframe
         "selected_index": config['selected_index'],
         "candle_interval": config['candle_interval'],
         "lot_size": index_config['lot_size'],
         "strike_interval": index_config['strike_interval'],
-        "expiry_type": index_config.get('expiry_type', 'weekly')
+        "expiry_type": index_config.get('expiry_type', 'weekly'),
+        # Risk Parameters
+        "order_qty": config['order_qty'],
+        "max_trades_per_day": config['max_trades_per_day'],
+        "daily_max_loss": config['daily_max_loss'],
+        "max_loss_per_trade": config.get('max_loss_per_trade', 0),
+        "initial_stoploss": config.get('initial_stoploss', 50),
+        "trail_start_profit": config['trail_start_profit'],
+        "trail_step": config['trail_step'],
+        "target_points": config['target_points'],
+        "risk_per_trade": config.get('risk_per_trade', 0),
+        # Indicator Settings
+        "indicator_type": config.get('indicator_type', 'supertrend'),
+        "supertrend_period": config.get('supertrend_period', 7),
+        "supertrend_multiplier": config.get('supertrend_multiplier', 4),
+        "rsi_period": config.get('rsi_period', 14),
+        "macd_fast": config.get('macd_fast', 12),
+        "macd_slow": config.get('macd_slow', 26),
+        "macd_signal": config.get('macd_signal', 9),
+        "ma_fast_period": config.get('ma_fast_period', 5),
+        "ma_slow_period": config.get('ma_slow_period', 20),
+        "bollinger_period": config.get('bollinger_period', 20),
+        "bollinger_std": config.get('bollinger_std', 2),
+        "stochastic_k_period": config.get('stochastic_k_period', 14),
+        "stochastic_d_period": config.get('stochastic_d_period', 3),
+        "adx_period": config.get('adx_period', 14),
     }
 
 
