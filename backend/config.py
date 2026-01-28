@@ -36,6 +36,7 @@ config = {
     "daily_max_loss": 2000,
     # Stop Loss Parameters
     "initial_stoploss": 50,  # Fixed SL points below entry (0 = disabled)
+    "max_loss_per_trade": 0,  # Max loss amount per trade (₹, 0 = disabled)
     "trail_start_profit": 10,  # Profit points to start trailing
     "trail_step": 5,  # Trailing step size
     # Profit Taking

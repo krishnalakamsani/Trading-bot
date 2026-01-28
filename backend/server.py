@@ -15,7 +15,7 @@ from typing import List
 # Local imports
 from config import ROOT_DIR, bot_state, config
 from models import ConfigUpdate
-from database import init_db, load_config, get_trades
+from database import init_db, load_config, get_trades, get_trade_analytics
 import bot_service
 
 # Configure logging
@@ -99,9 +99,15 @@ async def get_position():
 
 
 @api_router.get("/trades")
-async def get_trades_list(limit: int = Query(default=50, le=100)):
-    """Get trade history"""
+async def get_trades_list(limit: int = Query(default=None, le=10000)):
+    """Get trade history. Pass limit=None to get all trades"""
     return await get_trades(limit)
+
+
+@api_router.get("/analytics")
+async def get_analytics():
+    """Get comprehensive trade analytics and statistics"""
+    return await get_trade_analytics()
 
 
 @api_router.get("/summary")

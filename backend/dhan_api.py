@@ -354,4 +354,107 @@ class DhanAPI:
                 return response.get('data', [])
         except Exception as e:
             logger.error(f"Error fetching positions: {e}")
-        return []
+        return []    
+    async def verify_order_filled(self, order_id: str, security_id: str, expected_qty: int, timeout_seconds: int = 10) -> dict:
+        """Verify if an order was actually filled
+        
+        Returns:
+            {
+                "filled": bool,
+                "order_id": str,
+                "status": str,
+                "filled_qty": int,
+                "average_price": float,
+                "message": str
+            }
+        """
+        try:
+            import asyncio
+            start_time = datetime.now(timezone.utc)
+            
+            while True:
+                # Check order status
+                try:
+                    orders = self.dhan.get_order_list()
+                    if orders and 'data' in orders:
+                        for order in orders['data']:
+                            if str(order.get('orderId')) == str(order_id):
+                                status = order.get('orderStatus', '').upper()
+                                filled_qty = int(order.get('filledQty', 0))
+                                average_price = float(order.get('averagePrice', 0))
+                                
+                                if status == 'FILLED':
+                                    logger.info(f"[ORDER] Order {order_id} FILLED | Qty: {filled_qty} | Avg Price: {average_price}")
+                                    return {
+                                        "filled": True,
+                                        "order_id": order_id,
+                                        "status": "FILLED",
+                                        "filled_qty": filled_qty,
+                                        "average_price": average_price,
+                                        "message": f"Order filled at {average_price}"
+                                    }
+                                elif status in ['PENDING', 'OPEN']:
+                                    # Still pending, wait and retry
+                                    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+                                    if elapsed > timeout_seconds:
+                                        logger.warning(f"[ORDER] Order {order_id} timeout after {timeout_seconds}s | Status: {status}")
+                                        return {
+                                            "filled": False,
+                                            "order_id": order_id,
+                                            "status": status,
+                                            "filled_qty": filled_qty,
+                                            "average_price": average_price,
+                                            "message": f"Order pending after {timeout_seconds}s - may not fill"
+                                        }
+                                    await asyncio.sleep(0.5)
+                                    continue
+                                elif status == 'REJECTED':
+                                    logger.error(f"[ORDER] Order {order_id} REJECTED | Reason: {order.get('reason', 'Unknown')}")
+                                    return {
+                                        "filled": False,
+                                        "order_id": order_id,
+                                        "status": "REJECTED",
+                                        "filled_qty": 0,
+                                        "average_price": 0,
+                                        "message": f"Order rejected: {order.get('reason', 'Unknown')}"
+                                    }
+                                elif status == 'CANCELLED':
+                                    logger.warning(f"[ORDER] Order {order_id} CANCELLED")
+                                    return {
+                                        "filled": False,
+                                        "order_id": order_id,
+                                        "status": "CANCELLED",
+                                        "filled_qty": filled_qty,
+                                        "average_price": average_price,
+                                        "message": "Order was cancelled"
+                                    }
+                except Exception as e:
+                    logger.error(f"[ORDER] Error checking order status: {e}")
+                    await asyncio.sleep(0.5)
+                    continue
+                
+                # Order not found in list yet (might be too recent)
+                elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+                if elapsed > timeout_seconds:
+                    logger.warning(f"[ORDER] Order {order_id} not found after {timeout_seconds}s")
+                    return {
+                        "filled": False,
+                        "order_id": order_id,
+                        "status": "NOT_FOUND",
+                        "filled_qty": 0,
+                        "average_price": 0,
+                        "message": "Order not found in order list"
+                    }
+                
+                await asyncio.sleep(0.5)
+        
+        except Exception as e:
+            logger.error(f"[ORDER] Error verifying order fill: {e}", exc_info=True)
+            return {
+                "filled": False,
+                "order_id": order_id,
+                "status": "ERROR",
+                "filled_qty": 0,
+                "average_price": 0,
+                "message": str(e)
+            }

@@ -53,6 +53,31 @@ class TradingBot:
         )
         logger.info(f"[SIGNAL] SuperTrend reset - Period: {config['supertrend_period']}, Multiplier: {config['supertrend_multiplier']}")
     
+    def is_within_trading_hours(self) -> bool:
+        """Check if current time allows new entries
+        
+        Returns:
+            bool: True if within allowed trading hours, False otherwise
+        """
+        ist = get_ist_time()
+        current_time = ist.time()
+        
+        # Define trading hours
+        NO_ENTRY_BEFORE = datetime.strptime("09:25", "%H:%M").time()  # No entry before 9:25 AM
+        NO_ENTRY_AFTER = datetime.strptime("15:10", "%H:%M").time()   # No entry after 3:10 PM
+        
+        # Check if within allowed hours
+        if current_time < NO_ENTRY_BEFORE:
+            logger.info(f"[HOURS] Entry blocked - market not open yet (Current: {current_time.strftime('%H:%M')}, Opens: 09:25)")
+            return False
+        
+        if current_time > NO_ENTRY_AFTER:
+            logger.info(f"[HOURS] Entry blocked - market closing soon (Current: {current_time.strftime('%H:%M')}, Cutoff: 15:10)")
+            return False
+        
+        logger.debug(f"[HOURS] Trading hours OK (Current: {current_time.strftime('%H:%M')})")
+        return True
+    
     async def start(self):
         """Start the trading bot"""
         if self.running:
@@ -131,11 +156,20 @@ class TradingBot:
                 result = await self.dhan.place_order(security_id, "SELL", qty)
                 
                 if result.get('status') == 'success' and result.get('orderId'):
-                    logger.info(f"[ORDER] Exit order placed | OrderID: {result.get('orderId')} | Security: {security_id} | Qty: {qty}")
-                    # Use actual filled price if available
-                    actual_exit_price = result.get('price', 0)
-                    if actual_exit_price > 0:
-                        exit_price = actual_exit_price
+                    order_id = result.get('orderId')
+                    logger.info(f"[ORDER] Exit order placed | OrderID: {order_id} | Security: {security_id} | Qty: {qty}")
+                    
+                    # CRITICAL: Verify exit order was actually filled
+                    fill_status = await self.dhan.verify_order_filled(order_id, security_id, qty, timeout_seconds=15)
+                    
+                    if fill_status.get('filled'):
+                        logger.info(f"[ORDER] Exit order FILLED | Average Price: {fill_status.get('average_price')} | Message: {fill_status.get('message')}")
+                        # Use actual filled price
+                        actual_exit_price = fill_status.get('average_price', 0)
+                        if actual_exit_price > 0:
+                            exit_price = actual_exit_price
+                    else:
+                        logger.warning(f"[ORDER] Exit order NOT filled | Status: {fill_status.get('status')} | Message: {fill_status.get('message')}")
                 else:
                     logger.warning(f"[ORDER] Exit order may have failed or not confirmed: {result}")
             except Exception as e:
@@ -465,11 +499,21 @@ class TradingBot:
         index_config = get_index_config(config['selected_index'])
         qty = config['order_qty'] * index_config['lot_size']
         profit_points = current_ltp - self.entry_price
+        pnl = profit_points * qty
+        
+        # Check max loss per trade (if enabled)
+        max_loss_per_trade = config.get('max_loss_per_trade', 0)
+        if max_loss_per_trade > 0 and pnl < -max_loss_per_trade:
+            logger.info(
+                "[EXIT] Max loss per trade hit | LTP=%.2f | Entry=%.2f | Loss=₹%.2f | Limit=₹%.2f",
+                current_ltp, self.entry_price, abs(pnl), max_loss_per_trade
+            )
+            await self.close_position(current_ltp, pnl, "Max Loss Per Trade")
+            return True
         
         # Check target (if enabled)
         target_points = config.get('target_points', 0)
         if target_points > 0 and profit_points >= target_points:
-            pnl = profit_points * qty
             logger.info(
                 "[EXIT] Target hit (tick) | LTP=%.2f | Entry=%.2f | Profit=%.2f pts | Target=%.2f pts",
                 current_ltp, self.entry_price, profit_points, target_points
@@ -560,6 +604,10 @@ class TradingBot:
     
     async def enter_position(self, option_type: str, strike: int, index_ltp: float):
         """Enter a new position"""
+        # CHECK: Trading hours protection
+        if not self.is_within_trading_hours():
+            return
+        
         index_name = config['selected_index']
         index_config = get_index_config(index_name)
         
@@ -645,9 +693,18 @@ class TradingBot:
                 logger.error(f"[ERROR] Failed to place entry order: {result}")
                 return
             
-            # Use actual filled price if available, otherwise use last quoted price
-            filled_price = result.get('price', 0)
+            # CRITICAL: Verify order was actually filled (not just placed)
+            order_id = result.get('orderId')
+            fill_status = await self.dhan.verify_order_filled(order_id, security_id, qty, timeout_seconds=15)
+            
+            if not fill_status.get('filled'):
+                logger.error(f"[ERROR] Entry order NOT filled | Status: {fill_status.get('status')} | Message: {fill_status.get('message')}")
+                return
+            
+            # Order was filled! Use actual fill price
+            filled_price = fill_status.get('average_price', 0)
             if filled_price <= 0:
+                # Fallback to quoted price if fill price not available
                 filled_price = await self.dhan.get_option_ltp(
                     security_id=security_id,
                     strike=strike,
@@ -656,15 +713,11 @@ class TradingBot:
                     index_name=index_name
                 )
             
-            if filled_price > 0:
-                entry_price = filled_price
-            else:
-                logger.warning(f"[WARNING] Could not get filled price for order, using default")
-                entry_price = entry_price or 0
+            entry_price = filled_price or entry_price or 0
             
             logger.info(
-                "[ENTRY] LIVE | %s %s %s | Expiry: %s | OrderID: %s | Price: %s | Qty: %s",
-                index_name, option_type, strike, expiry, result.get('orderId'), entry_price, qty
+                "[ENTRY] LIVE | %s %s %s | Expiry: %s | OrderID: %s | Fill Price: %s | Qty: %s",
+                index_name, option_type, strike, expiry, order_id, entry_price, qty
             )
         
         # Save position

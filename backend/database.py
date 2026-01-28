@@ -69,7 +69,7 @@ async def load_config():
                         if key in ['order_qty', 'max_trades_per_day', 'candle_interval', 'supertrend_period', 'min_trade_gap']:
                             config[key] = int(value)
                         # Float fields
-                        elif key in ['daily_max_loss', 'initial_stoploss', 'trail_start_profit', 'trail_step', 'supertrend_multiplier', 'target_points', 'risk_per_trade']:
+                        elif key in ['daily_max_loss', 'initial_stoploss', 'max_loss_per_trade', 'trail_start_profit', 'trail_step', 'supertrend_multiplier', 'target_points', 'risk_per_trade']:
                             config[key] = float(value)
                         # Boolean fields
                         elif key in ['trade_only_on_flip']:
@@ -130,13 +130,102 @@ async def update_trade_exit(trade_id: str, exit_time: str, exit_price: float, pn
     except Exception as e:
         logger.error(f"[DB] Error updating trade exit: {e}")
 
-async def get_trades(limit: int = 50) -> list:
-    """Get recent trades"""
+async def get_trades(limit: int = None) -> list:
+    """Get trade history
+    
+    Args:
+        limit: Number of trades to fetch. None = all trades
+    """
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
+        if limit:
+            async with db.execute(
+                'SELECT * FROM trades ORDER BY created_at DESC LIMIT ?',
+                (limit,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+        else:
+            # Fetch all trades
+            async with db.execute(
+                'SELECT * FROM trades ORDER BY created_at DESC'
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+async def get_trade_analytics() -> dict:
+    """Get comprehensive trade analytics"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Fetch all completed trades
         async with db.execute(
-            'SELECT * FROM trades ORDER BY created_at DESC LIMIT ?',
-            (limit,)
+            'SELECT * FROM trades WHERE pnl IS NOT NULL ORDER BY created_at DESC'
         ) as cursor:
-            rows = await cursor.fetchall()
-            return [dict(row) for row in rows]
+            trades = await cursor.fetchall()
+        
+        trades = [dict(row) for row in trades]
+        
+        if not trades:
+            return {
+                'total_trades': 0,
+                'total_pnl': 0,
+                'winning_trades': 0,
+                'losing_trades': 0,
+                'win_rate': 0,
+                'avg_win': 0,
+                'avg_loss': 0,
+                'profit_factor': 0,
+                'max_profit': 0,
+                'max_loss': 0,
+                'avg_trade_pnl': 0,
+                'trades_by_type': {},
+                'trades': []
+            }
+        
+        total_trades = len(trades)
+        total_pnl = sum(t['pnl'] for t in trades)
+        winning_trades = [t for t in trades if t['pnl'] > 0]
+        losing_trades = [t for t in trades if t['pnl'] < 0]
+        
+        win_count = len(winning_trades)
+        loss_count = len(losing_trades)
+        total_profit = sum(t['pnl'] for t in winning_trades)
+        total_loss = abs(sum(t['pnl'] for t in losing_trades))
+        
+        # Calculate statistics
+        win_rate = (win_count / total_trades * 100) if total_trades > 0 else 0
+        avg_win = total_profit / win_count if win_count > 0 else 0
+        avg_loss = total_loss / loss_count if loss_count > 0 else 0
+        profit_factor = total_profit / total_loss if total_loss > 0 else (total_profit if total_profit > 0 else 0)
+        avg_trade_pnl = total_pnl / total_trades if total_trades > 0 else 0
+        
+        # Trades by option type
+        trades_by_type = {}
+        for trade in trades:
+            opt_type = trade['option_type']
+            if opt_type not in trades_by_type:
+                trades_by_type[opt_type] = []
+            trades_by_type[opt_type].append(trade)
+        
+        return {
+            'total_trades': total_trades,
+            'total_pnl': round(total_pnl, 2),
+            'winning_trades': win_count,
+            'losing_trades': loss_count,
+            'win_rate': round(win_rate, 2),
+            'avg_win': round(avg_win, 2),
+            'avg_loss': round(avg_loss, 2),
+            'profit_factor': round(profit_factor, 2),
+            'max_profit': round(max((t['pnl'] for t in trades), default=0), 2),
+            'max_loss': round(min((t['pnl'] for t in trades), default=0), 2),
+            'avg_trade_pnl': round(avg_trade_pnl, 2),
+            'trades_by_type': {
+                opt_type: {
+                    'count': len(type_trades),
+                    'pnl': round(sum(t['pnl'] for t in type_trades), 2),
+                    'win_rate': round(len([t for t in type_trades if t['pnl'] > 0]) / len(type_trades) * 100, 2) if type_trades else 0
+                }
+                for opt_type, type_trades in trades_by_type.items()
+            },
+            'trades': trades
+        }

@@ -32,6 +32,7 @@ const SettingsPanel = ({ onClose }) => {
   const [orderQty, setOrderQty] = useState(config.order_qty);
   const [maxTrades, setMaxTrades] = useState(config.max_trades_per_day);
   const [maxLoss, setMaxLoss] = useState(config.daily_max_loss);
+  const [maxLossPerTrade, setMaxLossPerTrade] = useState(config.max_loss_per_trade || 0);
   const [initialSL, setInitialSL] = useState(config.initial_stoploss || 0);
   const [trailStart, setTrailStart] = useState(config.trail_start_profit);
   const [trailStep, setTrailStep] = useState(config.trail_step);
@@ -63,6 +64,7 @@ const SettingsPanel = ({ onClose }) => {
       order_qty: orderQty,
       max_trades_per_day: maxTrades,
       daily_max_loss: maxLoss,
+      max_loss_per_trade: maxLossPerTrade,
       initial_stoploss: initialSL,
       trail_start_profit: trailStart,
       trail_step: trailStep,
@@ -294,6 +296,20 @@ const SettingsPanel = ({ onClose }) => {
                   className="mt-1 rounded-sm"
                   data-testid="max-loss-input"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="max-loss-per-trade">Max Loss Per Trade (₹)</Label>
+                <Input
+                  id="max-loss-per-trade"
+                  type="number"
+                  min="0"
+                  value={maxLossPerTrade}
+                  onChange={(e) => setMaxLossPerTrade(parseFloat(e.target.value))}
+                  className="mt-1 rounded-sm"
+                  data-testid="max-loss-per-trade-input"
+                />
+                <p className="text-xs text-gray-500 mt-1">0 = disabled</p>
               </div>
 
               <div>

@@ -159,6 +159,11 @@ async def update_config_values(updates: dict) -> dict:
         updated_fields.append('initial_stoploss')
         logger.info(f"[CONFIG] Initial stoploss changed to: {config['initial_stoploss']} pts")
         
+    if updates.get('max_loss_per_trade') is not None:
+        config['max_loss_per_trade'] = float(updates['max_loss_per_trade'])
+        updated_fields.append('max_loss_per_trade')
+        logger.info(f"[CONFIG] Max loss per trade changed to: ₹{config['max_loss_per_trade']}")
+        
     if updates.get('trail_start_profit') is not None:
         config['trail_start_profit'] = float(updates['trail_start_profit'])
         updated_fields.append('trail_start_profit')

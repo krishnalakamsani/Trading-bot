@@ -1,10 +1,12 @@
 import React, { useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppContext } from "@/App";
-import { Settings, Wifi, WifiOff, Clock, TrendingUp } from "lucide-react";
+import { Settings, Wifi, WifiOff, Clock, TrendingUp, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const TopBar = ({ onSettingsClick }) => {
   const { botStatus, wsConnected, config } = useContext(AppContext);
+  const navigate = useNavigate();
 
   // Format timeframe for display
   const formatTimeframe = (seconds) => {
@@ -102,17 +104,30 @@ const TopBar = ({ onSettingsClick }) => {
         </div>
       </div>
 
-      {/* Right - Settings Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onSettingsClick}
-        className="rounded-sm btn-active"
-        data-testid="settings-btn"
-      >
-        <Settings className="w-4 h-4 mr-1" />
-        Settings
-      </Button>
+      {/* Right - Settings & Analysis Buttons */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/analysis')}
+          className="rounded-sm btn-active hidden sm:flex"
+          data-testid="analysis-btn"
+          title="View trade analysis and statistics"
+        >
+          <BarChart3 className="w-4 h-4 mr-1" />
+          Analysis
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onSettingsClick}
+          className="rounded-sm btn-active"
+          data-testid="settings-btn"
+        >
+          <Settings className="w-4 h-4 mr-1" />
+          Settings
+        </Button>
+      </div>
     </div>
   );
 };

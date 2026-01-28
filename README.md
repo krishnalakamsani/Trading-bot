@@ -1,220 +1,419 @@
-# NiftyAlgo Terminal - Automated Options Trading Bot
+# SuperTrend Trading Bot 🤖
 
-A full-stack automated options trading bot for Nifty Index using Dhan Trading API with a real-time dashboard.
-
-## Features
-
-- **SuperTrend Strategy**: SuperTrend(7,4) on 5-second candles
-- **ATM Strike Selection**: Nifty spot rounded to nearest 50
-- **Risk Management**: Max trades/day, daily loss limit, time-based exits
-- **Trailing Stop Loss**: Configurable parameters
-- **Paper/Live Modes**: Test without real money first
-- **Real-time Dashboard**: Live updates via WebSocket
+An automated options trading bot for NSE indices (NIFTY, BANKNIFTY, SENSEX, FINNIFTY) using the SuperTrend indicator and Dhan Trading API. Paper and live trading modes with real-time dashboard.
 
 ---
 
-## 🐳 Docker Deployment (Recommended)
+## 🚀 Quick Features
 
-### Prerequisites
-- Docker & Docker Compose installed
-- EC2 instance with ports 80 and 8001 open
+✅ **SuperTrend Strategy** - Period 7, Multiplier 4 on 5-second candles  
+✅ **Multiple Indices** - NIFTY, BANKNIFTY, SENSEX, FINNIFTY support  
+✅ **Risk Management** - Daily loss limits, per-trade loss caps, position sizing  
+✅ **Trailing Stop Loss** - Dynamic SL that follows profits  
+✅ **Order Fill Verification** - Confirms orders are actually filled  
+✅ **Trading Hours Protection** - No entries before 9:25 AM or after 3:10 PM  
+✅ **Paper & Live Modes** - Test safely before going live  
+✅ **Trade Analysis** - Post-market analytics with filters and statistics  
+✅ **Real-time Dashboard** - Live updates via WebSocket
 
-### Quick Start
+---
 
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd niftyalgo-terminal
+## 📋 System Requirements
 
-# Create environment file
-cp .env.example .env
+- **OS**: Linux/Mac/Windows
+- **Python**: 3.9+
+- **Node.js**: 16+ (for frontend)
+- **Docker**: (optional, for containerized deployment)
 
-# Edit .env with your EC2 public IP
-nano .env
-# Set: REACT_APP_BACKEND_URL=http://YOUR_EC2_PUBLIC_IP:8001
+---
 
-# Build and run
-docker-compose up -d --build
+## 🏗️ Architecture
 
-# Check status
-docker-compose ps
-
-# View logs
-docker-compose logs -f
+```
+Trading-Bot/
+├── backend/                 # Python FastAPI server
+│   ├── dhan_api.py         # Dhan broker API wrapper
+│   ├── trading_bot.py      # Core trading engine
+│   ├── indicators.py       # SuperTrend indicator
+│   ├── database.py         # SQLite operations
+│   ├── config.py           # Configuration & state
+│   └── server.py           # FastAPI routes
+├── frontend/                # React dashboard
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx    # Main trading UI
+│   │   │   └── TradesAnalysis.jsx  # Trade statistics
+│   │   ├── components/
+│   │   │   ├── ControlsPanel.jsx   # Start/Stop/Mode
+│   │   │   ├── SettingsPanel.jsx   # Configuration
+│   │   │   └── TradesTable.jsx     # Trade history
+│   │   └── App.js
+│   └── package.json
+└── README.md
 ```
 
-### Access the Application
-- **Frontend**: `http://YOUR_EC2_IP` (port 80)
-- **Backend API**: `http://YOUR_EC2_IP:8001/api`
+---
 
-### Useful Commands
+## 🔧 Installation & Setup
+
+### Backend Setup
 
 ```bash
-# Stop containers
-docker-compose down
+# Navigate to project root
+cd Trading-bot
 
-# Restart containers
-docker-compose restart
+# Install Python dependencies
+pip install -r backend/requirements.txt
 
-# Rebuild after code changes
+# Create logs directory
+mkdir -p backend/logs
+mkdir -p backend/data
+```
+
+### Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Create .env file
+echo "REACT_APP_BACKEND_URL=http://localhost:8000" > .env
+```
+
+---
+
+## 🚢 Deployment
+
+### Option 1: Local Development (Recommended for Testing)
+
+**Terminal 1 - Backend**:
+```bash
+cd backend
+python -m uvicorn server:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 - Frontend**:
+```bash
+cd frontend
+npm start
+```
+
+Access the app at: `http://localhost:3000`
+
+### Option 2: Docker Deployment (Production)
+
+**Requirements**:
+- Docker & Docker Compose installed
+
+**Steps**:
+
+1. **Create .env file**:
+```bash
+cp .env.example .env
+```
+
+2. **Update .env** with your IP/domain:
+```env
+REACT_APP_BACKEND_URL=http://your-server-ip:8000
+BACKEND_PORT=8000
+```
+
+3. **Start containers**:
+```bash
 docker-compose up -d --build
+```
 
-# View backend logs
+4. **Verify deployment**:
+```bash
+docker-compose ps
+docker-compose logs -f backend
+```
+
+**Access**:
+- Frontend: `http://your-server-ip`
+- API: `http://your-server-ip:8000/api`
+
+**Useful Docker Commands**:
+```bash
+docker-compose down          # Stop all containers
+docker-compose logs -f       # View logs
+docker-compose restart       # Restart containers
+docker cp <container>:/app/data/trading.db ./backup.db  # Backup DB
+```
+
+### Option 3: Systemd Service (Linux Production)
+
+Create `/etc/systemd/system/trading-bot.service`:
+```ini
+[Unit]
+Description=Trading Bot
+After=network.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/path/to/Trading-bot/backend
+ExecStart=/usr/bin/python -m uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start trading-bot
+sudo systemctl enable trading-bot
+```
+
+---
+
+## 📖 How to Use
+
+### 1. Initial Setup
+
+**Step 1**: Open dashboard at `http://localhost:3000`
+
+**Step 2**: Go to **Settings** → **Credentials**
+- Enter Dhan API Token
+- Enter Dhan Client ID
+- Click **Save**
+
+**Step 3**: Go to **Settings** → **Risk** to configure:
+- **Initial Stop Loss**: Points (e.g., 50)
+- **Max Loss Per Trade**: ₹ (e.g., 500, 0=disabled)
+- **Trail Start Profit**: Points to start trailing (e.g., 10)
+- **Trail Step**: How much to move SL per step (e.g., 5)
+- **Target Points**: Exit at profit (e.g., 100, 0=disabled)
+- **Risk Per Trade**: Rupees to risk (e.g., 1000, 0=disabled)
+- **Daily Max Loss**: ₹ (e.g., 2000)
+- **Max Trades/Day**: Limit entries (e.g., 5)
+
+### 2. Start Trading
+
+**Click "Start Bot"** button to begin:
+- Select **Paper** mode first (highly recommended!)
+- Monitor **Top Bar** status indicators
+- Watch **Market Data** section for SuperTrend signals
+- Monitor **Position Panel** for open positions
+
+### 3. Monitor Trading
+
+**Dashboard shows**:
+- Current index LTP (NIFTY/BANKNIFTY/etc)
+- SuperTrend signal (GREEN=Buy CE, RED=Buy PE)
+- Current open position (strike, entry, P&L)
+- Daily summary (trades, P&L, max drawdown)
+- Recent trade logs
+
+### 4. Manual Exits
+
+**Click "Square Off"** button to close position:
+- Closes at current market price
+- Saves trade with actual exit
+- No confirmation dialog
+
+### 5. View Trade Analysis
+
+**Click "Analysis"** button in top bar:
+- **Overview**: Statistics, Win Rate, Profit Factor
+- **All Trades Tab**: Filter by type, exit reason, strike, P&L range
+
+---
+
+## 📊 Features Explained
+
+### SuperTrend Strategy
+- **Indicator**: SuperTrend(Period=7, Multiplier=4)
+- **Timeframe**: 5-second candles
+- **Entry**: 
+  - GREEN = Buy CE (Call)
+  - RED = Buy PE (Put)
+- **Strike**: ATM (spot rounded to nearest 50)
+- **Exit Conditions** (priority order):
+  1. Max Loss Per Trade exceeded ⚠️
+  2. Target Points hit ✓
+  3. Trailing Stop Loss hit
+  4. Daily Max Loss triggered
+
+### Risk Management
+
+**Daily Max Loss**: 
+- Once triggered, no new entries allowed
+- Existing positions can still exit
+
+**Max Loss Per Trade**: 
+- Individual trade risk limit
+- Auto-closes if exceeded
+
+**Risk Per Trade**: 
+- Auto-calculates position size
+- Formula: `Qty = RiskAmount / (SL_Points × Lot_Size)`
+
+**Trailing Stop Loss**:
+- Activates after `Trail Start Profit`
+- Moves up by `Trail Step` on each high
+- Locks in profits
+
+### Trading Hours Protection
+- **No entries before**: 9:25 AM
+- **No entries after**: 3:10 PM
+- Prevents overnight position risk
+- Existing positions can exit anytime
+
+### Order Fill Verification
+- Every order verified filled
+- Checks status every 0.5 seconds
+- Waits max 15 seconds
+- Ensures accuracy with broker
+
+---
+
+## ⚙️ Configuration Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Initial SL | 50 | Points below entry |
+| Max Loss/Trade | 0 | ₹ per trade (0=disabled) |
+| Trail Start | 10 | Profit points to start trailing |
+| Trail Step | 5 | SL increment points |
+| Target Points | 0 | Profit exit (0=disabled) |
+| Risk/Trade | 0 | ₹ for auto-sizing (0=disabled) |
+| Daily Max Loss | 2000 | ₹ daily limit |
+| Max Trades/Day | 5 | Entry limit |
+
+---
+
+## 🐛 Troubleshooting
+
+**Bot won't connect to Dhan**:
+- Check credentials in Settings
+- Verify token hasn't expired
+- Check internet connection
+
+**Orders not placed**:
+- Are you in Paper or Live mode?
+- Is bot running (shows "Running")?
+- Is it between 9:25 AM - 3:10 PM?
+- Check daily max loss triggered?
+
+**Positions not closing**:
+- Check exit conditions being met
+- Use "Square Off" to force close
+- Check bot still running
+
+**Analytics shows no trades**:
+- Only completed trades appear
+- Check a trade is actually exited
+
+**Frontend won't load**:
+- Backend must be running on port 8000
+- Check `REACT_APP_BACKEND_URL` environment variable
+- Check firewall not blocking port 8000
+
+---
+
+## 📝 Trading Mode Differences
+
+| Feature | Paper Mode | Live Mode |
+|---------|-----------|-----------|
+| Orders | Simulated | Real orders |
+| Money | Play money | Actual rupees |
+| Risk | None | Real losses possible |
+
+**Always test in Paper mode first!**
+
+---
+
+## 🔐 Security & Safety
+
+- **Local Credentials**: Stored in SQLite on your machine
+- **No Cloud**: Everything runs locally
+- **Order Validation**: Every order verified filled
+- **Circuit Breakers**: Daily loss limits prevent catastrophic losses
+- **HTTPS**: Use HTTPS in production
+
+---
+
+## 📈 Post-Deployment Checklist
+
+- [ ] Test in Paper mode for 1-2 days
+- [ ] Review trades daily in Analytics page
+- [ ] Fine-tune SL/Target based on results
+- [ ] Monitor logs for errors
+- [ ] Start Live with 1 lot
+- [ ] Increase gradually based on confidence
+
+---
+
+## 📄 Logs & Debugging
+
+```bash
+# Backend logs
+backend/logs/bot.log
+
+# Docker logs
 docker-compose logs -f backend
 
-# View frontend logs
-docker-compose logs -f frontend
-
-# Access backend container shell
-docker-compose exec backend bash
-
-# Backup database
-docker cp niftyalgo-backend:/app/data/trading.db ./backup_trading.db
+# Real-time logs
+docker-compose logs --follow
 ```
 
----
-
-## 🖥️ EC2 Ubuntu Setup (Complete Guide)
-
-### 1. Launch EC2 Instance
-- **AMI**: Ubuntu 22.04 LTS
-- **Instance Type**: t3.small or higher
-- **Storage**: 20GB minimum
-- **Security Group**: Open ports 22, 80, 8001
-
-### 2. Connect and Install Docker
-
-```bash
-# Connect to EC2
-ssh -i your-key.pem ubuntu@YOUR_EC2_IP
-
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker ubuntu
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Logout and login again for docker group to take effect
-exit
-```
-
-### 3. Deploy Application
-
-```bash
-# Clone repo
-git clone <your-repo-url>
-cd niftyalgo-terminal
-
-# Configure environment
-cp .env.example .env
-nano .env
-# Set REACT_APP_BACKEND_URL to your EC2 public IP
-
-# Build and run
-docker-compose up -d --build
-
-# Verify
-docker-compose ps
-curl http://localhost:8001/api/status
-```
-
-### 4. Configure Security Group
-Ensure these inbound rules:
-| Port | Protocol | Source | Purpose |
-|------|----------|--------|---------|
-| 22 | TCP | Your IP | SSH |
-| 80 | TCP | 0.0.0.0/0 | Frontend |
-| 8001 | TCP | 0.0.0.0/0 | Backend API |
-
----
-
-## 🔧 Configuration
-
-### Update Dhan Credentials
-1. Open `http://YOUR_EC2_IP` in browser
-2. Click Settings (⚙️ icon)
-3. Enter Client ID and Access Token from [web.dhan.co](https://web.dhan.co)
-4. Click "Save Credentials"
-
-**Note**: Dhan access token expires daily. Update it each morning before market opens.
-
-### Risk Parameters
-Configurable via Settings → Risk Parameters:
-- Order Quantity (default: 50 = 1 lot)
-- Max Trades/Day (default: 5)
-- Daily Max Loss (default: ₹2000)
-- Trail Start Profit (default: 10 points)
-- Trail Step (default: 5 points)
-- Trailing SL Distance (default: 10 points)
-
----
-
-## 📊 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/status | Bot status |
-| GET | /api/market/nifty | Nifty LTP & SuperTrend |
-| GET | /api/position | Current position |
-| GET | /api/trades | Trade history |
-| GET | /api/summary | Daily summary |
-| GET | /api/logs | Bot logs |
-| GET | /api/config | Configuration |
-| POST | /api/bot/start | Start trading |
-| POST | /api/bot/stop | Stop trading |
-| POST | /api/bot/squareoff | Force exit |
-| POST | /api/config/update | Update settings |
-| WS | /ws | Real-time updates |
-
----
-
-## 🚀 Production Tips
-
-### Enable HTTPS with Let's Encrypt
-
-```bash
-# Install certbot
-sudo apt install certbot python3-certbot-nginx -y
-
-# Get certificate (replace with your domain)
-sudo certbot --nginx -d yourdomain.com
-
-# Auto-renewal is configured automatically
-```
-
-### Setup Auto-restart on Boot
-
-```bash
-# Enable Docker service
-sudo systemctl enable docker
-
-# The containers will auto-restart due to restart: unless-stopped policy
-```
-
-### Monitor Resources
-
-```bash
-# View container stats
-docker stats
-
-# View disk usage
-docker system df
-```
+Each log entry includes:
+- Timestamp
+- Component tag [ORDER], [SIGNAL], [ENTRY], etc.
+- Detailed message for debugging
 
 ---
 
 ## ⚠️ Disclaimer
 
-This is for educational purposes only. Trading in derivatives involves substantial risk of loss. Past performance is not indicative of future results. Use at your own risk.
+**This bot makes REAL trades with REAL money in Live mode.**
+
+- Past performance ≠ future results
+- Options trading is RISKY - you can lose everything
+- **Start with Paper Trading only**
+- Use only capital you can afford to lose
+- SuperTrend is NOT a guaranteed winning strategy
+- Market gaps can cause losses beyond SL
+- Monitor the bot regularly
+
+**Use entirely at your own risk.**
 
 ---
 
-## 📝 License
+## 📞 Quick Start Summary
 
-MIT License
+```bash
+# 1. Install
+pip install -r backend/requirements.txt
+cd frontend && npm install
+
+# 2. Start Backend
+cd backend && python -m uvicorn server:app --reload
+
+# 3. Start Frontend
+cd frontend && npm start
+
+# 4. Open http://localhost:3000
+
+# 5. Settings → Add Dhan credentials
+
+# 6. Settings → Configure Risk
+
+# 7. Click "Start Bot" → Select "Paper"
+
+# 8. Monitor trades
+
+# 9. Check Analytics page for statistics
+```
+
+---
+
+**Last Updated**: January 2026  
+**Version**: 1.0  
+**Status**: Production Ready ✅

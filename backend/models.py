@@ -9,6 +9,7 @@ class ConfigUpdate(BaseModel):
     max_trades_per_day: Optional[int] = None
     daily_max_loss: Optional[float] = None
     initial_stoploss: Optional[float] = None  # Fixed SL points below entry
+    max_loss_per_trade: Optional[float] = None  # Max loss per trade (₹, 0=disabled)
     trail_start_profit: Optional[float] = None
     trail_step: Optional[float] = None
     target_points: Optional[float] = None  # Target profit points for exit

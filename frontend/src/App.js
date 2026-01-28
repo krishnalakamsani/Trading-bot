@@ -4,6 +4,7 @@ import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import Dashboard from "@/pages/Dashboard";
+import TradesAnalysis from "@/pages/TradesAnalysis";
 import "@/App.css";
 
 // Use environment variable or default to relative path for production
@@ -53,6 +54,7 @@ function App() {
     order_qty: 1,
     max_trades_per_day: 5,
     daily_max_loss: 2000,
+    max_loss_per_trade: 0,
     initial_stoploss: 50,
     trail_start_profit: 10,
     trail_step: 5,
@@ -301,6 +303,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/analysis" element={<TradesAnalysis />} />
           </Routes>
         </BrowserRouter>
       </div>
