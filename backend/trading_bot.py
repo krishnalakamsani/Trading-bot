@@ -10,7 +10,7 @@ import random
 from config import bot_state, config, DB_PATH
 from indices import get_index_config, round_to_strike
 from utils import get_ist_time, is_market_open, can_take_new_trade, should_force_squareoff, format_timeframe
-from indicators import SuperTrend
+from indicators import SuperTrend, RSI, MACD, MovingAverage, BollingerBands, Stochastic, ADX, SuperTrendMACD
 from dhan_api import DhanAPI
 from database import save_trade, update_trade_exit
 
@@ -28,13 +28,11 @@ class TradingBot:
         self.entry_price = 0.0
         self.trailing_sl = None
         self.highest_profit = 0.0
-        self.supertrend = SuperTrend(
-            period=config['supertrend_period'],
-            multiplier=config['supertrend_multiplier']
-        )
+        self.indicator = None  # Will hold selected indicator
         self.last_exit_candle_time = None
         self.last_trade_time = None  # For min_trade_gap protection
         self.last_signal = None  # For trade_only_on_flip protection
+        self._initialize_indicator()
     
     def initialize_dhan(self):
         """Initialize Dhan API connection"""
@@ -45,13 +43,66 @@ class TradingBot:
         logger.warning("[ERROR] Dhan API credentials not configured")
         return False
     
-    def reset_supertrend(self):
-        """Reset SuperTrend indicator"""
-        self.supertrend = SuperTrend(
-            period=config['supertrend_period'],
-            multiplier=config['supertrend_multiplier']
-        )
-        logger.info(f"[SIGNAL] SuperTrend reset - Period: {config['supertrend_period']}, Multiplier: {config['supertrend_multiplier']}")
+    def _initialize_indicator(self):
+        """Initialize the selected indicator based on config"""
+        indicator_type = config.get('indicator_type', 'supertrend').lower()
+        
+        try:
+            if indicator_type == 'supertrend':
+                self.indicator = SuperTrend(
+                    period=config['supertrend_period'],
+                    multiplier=config['supertrend_multiplier']
+                )
+            elif indicator_type == 'rsi':
+                self.indicator = RSI(period=config['rsi_period'])
+            elif indicator_type == 'macd':
+                self.indicator = MACD(
+                    fast=config['macd_fast'],
+                    slow=config['macd_slow'],
+                    signal=config['macd_signal']
+                )
+            elif indicator_type == 'ma':
+                self.indicator = MovingAverage(
+                    fast_period=config['ma_fast_period'],
+                    slow_period=config['ma_slow_period']
+                )
+            elif indicator_type == 'bollinger':
+                self.indicator = BollingerBands(
+                    period=config['bollinger_period'],
+                    num_std=config['bollinger_std']
+                )
+            elif indicator_type == 'stochastic':
+                self.indicator = Stochastic(
+                    k_period=config['stochastic_k_period'],
+                    d_period=config['stochastic_d_period']
+                )
+            elif indicator_type == 'adx':
+                self.indicator = ADX(period=config['adx_period'])
+            elif indicator_type == 'supertrend_macd':
+                self.indicator = SuperTrendMACD(
+                    supertrend_period=config['supertrend_period'],
+                    supertrend_mult=config['supertrend_multiplier'],
+                    macd_fast=config['macd_fast'],
+                    macd_slow=config['macd_slow'],
+                    macd_signal=config['macd_signal']
+                )
+            else:
+                logger.warning(f"[SIGNAL] Unknown indicator type: {indicator_type}, using SuperTrend")
+                self.indicator = SuperTrend(
+                    period=config['supertrend_period'],
+                    multiplier=config['supertrend_multiplier']
+                )
+            
+            logger.info(f"[SIGNAL] Indicator initialized: {indicator_type}")
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to initialize indicator: {e}")
+            self.indicator = SuperTrend(period=7, multiplier=4)
+    
+    def reset_indicator(self):
+        """Reset the selected indicator"""
+        if self.indicator:
+            self.indicator.reset()
+            logger.info(f"[SIGNAL] Indicator reset: {config.get('indicator_type', 'supertrend')}")
     
     def is_within_trading_hours(self) -> bool:
         """Check if current time allows new entries
@@ -88,13 +139,14 @@ class TradingBot:
         
         self.running = True
         bot_state['is_running'] = True
-        self.reset_supertrend()
+        self.reset_indicator()
         self.last_signal = None
         self.task = asyncio.create_task(self.run_loop())
         
         index_name = config['selected_index']
         interval = format_timeframe(config['candle_interval'])
-        logger.info(f"[BOT] Started - Index: {index_name}, Timeframe: {interval}, Mode: {bot_state['mode']}")
+        indicator_name = config.get('indicator_type', 'supertrend')
+        logger.info(f"[BOT] Started - Index: {index_name}, Timeframe: {interval}, Indicator: {indicator_name}, Mode: {bot_state['mode']}")
         
         return {"status": "success", "message": f"Bot started for {index_name} ({interval})"}
     
@@ -306,17 +358,18 @@ class TradingBot:
                     candle_number += 1
                     
                     if high > 0 and low < float('inf'):
-                        st_value, signal = self.supertrend.add_candle(high, low, close)
+                        indicator_value, signal = self.indicator.add_candle(high, low, close)
                         
-                        if st_value and signal:
-                            bot_state['supertrend_value'] = st_value
+                        if indicator_value and signal:
+                            bot_state['supertrend_value'] = indicator_value if isinstance(indicator_value, (int, float)) else str(indicator_value)
                             bot_state['last_supertrend_signal'] = signal
                             
                             # Detailed candle close log
+                            indicator_name = config.get('indicator_type', 'supertrend')
                             logger.info(
                                 f"[CANDLE CLOSE #{candle_number}] {index_name} | "
                                 f"H={high:.2f} L={low:.2f} C={close:.2f} | "
-                                f"SuperTrend={st_value:.2f} | "
+                                f"{indicator_name.upper()}={indicator_value} | "
                                 f"Signal={signal} | "
                                 f"Interval={format_timeframe(candle_interval)}"
                             )

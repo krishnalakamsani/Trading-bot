@@ -41,6 +41,7 @@ const SettingsPanel = ({ onClose }) => {
 
   // Strategy Parameters
   const [selectedIndex, setSelectedIndex] = useState(config.selected_index || "NIFTY");
+  const [indicatorType, setIndicatorType] = useState(config.indicator_type || "supertrend");
 
   const [saving, setSaving] = useState(false);
 
@@ -78,6 +79,7 @@ const SettingsPanel = ({ onClose }) => {
     setSaving(true);
     await updateConfig({
       selected_index: selectedIndex,
+      indicator_type: indicatorType,
     });
     setSaving(false);
   };
@@ -143,10 +145,38 @@ const SettingsPanel = ({ onClose }) => {
                   Lot size: {indexInfo.lot_size}, Strike: {indexInfo.strike_interval}
                 </p>
               </div>
+
+              <div>
+                <Label htmlFor="indicator-select">Indicator</Label>
+                <Select
+                  value={indicatorType}
+                  onValueChange={setIndicatorType}
+                >
+                  <SelectTrigger className="mt-1 rounded-sm" data-testid="settings-indicator-select">
+                    <SelectValue placeholder="Select Indicator" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="supertrend">SuperTrend</SelectItem>
+                    <SelectItem value="supertrend_macd">SuperTrend + MACD</SelectItem>
+                    <SelectItem value="rsi">RSI</SelectItem>
+                    <SelectItem value="macd">MACD</SelectItem>
+                    <SelectItem value="ma">Moving Average</SelectItem>
+                    <SelectItem value="bollinger">Bollinger Bands</SelectItem>
+                    <SelectItem value="stochastic">Stochastic</SelectItem>
+                    <SelectItem value="adx">ADX</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select trading strategy
+                </p>
+              </div>
             </div>
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-800">
-              <strong>Strategy:</strong> SuperTrend (7, 4) based entry/exit on selected index options.
+              <strong>Strategy:</strong> {indicatorType === 'supertrend_macd' 
+                ? 'SuperTrend (trigger) + MACD (confirmation) - only enters when MACD aligns with SuperTrend direction' 
+                : indicatorType.charAt(0).toUpperCase() + indicatorType.slice(1) + ' based entry/exit'}
+              <br />
               GREEN signal = Buy CE, RED signal = Buy PE.
               <br />
               <em className="text-xs mt-1">Tip: Select timeframe from Controls panel</em>

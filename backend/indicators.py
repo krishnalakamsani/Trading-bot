@@ -1,4 +1,4 @@
-# SuperTrend Indicator
+# Multiple Trading Indicators
 import logging
 
 logger = logging.getLogger(__name__)
@@ -99,3 +99,418 @@ class SuperTrend:
         
         signal = "GREEN" if direction == 1 else "RED"
         return supertrend_value, signal
+
+class RSI:
+    """Relative Strength Index Indicator"""
+    def __init__(self, period=14):
+        self.period = period
+        self.closes = []
+        self.rsi_values = []
+    
+    def reset(self):
+        self.closes = []
+        self.rsi_values = []
+    
+    def add_candle(self, high, low, close):
+        """Add candle and calculate RSI"""
+        self.closes.append(close)
+        
+        if len(self.closes) < self.period + 1:
+            return None, None
+        
+        # Calculate gains and losses
+        gains = []
+        losses = []
+        for i in range(1, len(self.closes)):
+            change = self.closes[i] - self.closes[i-1]
+            gains.append(max(0, change))
+            losses.append(max(0, -change))
+        
+        # Average gain and loss
+        avg_gain = sum(gains[-self.period:]) / self.period if self.period > 0 else 0
+        avg_loss = sum(losses[-self.period:]) / self.period if self.period > 0 else 0
+        
+        # RS and RSI
+        rs = avg_gain / avg_loss if avg_loss > 0 else 0
+        rsi = 100 - (100 / (1 + rs)) if rs > 0 else 50
+        
+        self.rsi_values.append(rsi)
+        
+        # Signal: GREEN if RSI < 30 (oversold), RED if RSI > 70 (overbought)
+        if rsi < 30:
+            signal = "GREEN"
+        elif rsi > 70:
+            signal = "RED"
+        else:
+            signal = None
+        
+        return rsi, signal
+
+
+class MACD:
+    """Moving Average Convergence Divergence"""
+    def __init__(self, fast=12, slow=26, signal=9):
+        self.fast = fast
+        self.slow = slow
+        self.signal_period = signal
+        self.closes = []
+        self.macd_values = []
+    
+    def reset(self):
+        self.closes = []
+        self.macd_values = []
+    
+    def _ema(self, values, period):
+        """Calculate Exponential Moving Average"""
+        if len(values) < period:
+            return None
+        
+        if len(values) == period:
+            return sum(values[-period:]) / period
+        
+        alpha = 2 / (period + 1)
+        ema = sum(values[-period:]) / period
+        for val in values[-len(values)+period:]:
+            ema = val * alpha + ema * (1 - alpha)
+        return ema
+    
+    def add_candle(self, high, low, close):
+        """Add candle and calculate MACD"""
+        self.closes.append(close)
+        
+        if len(self.closes) < self.slow + self.signal_period:
+            return None, None
+        
+        # Calculate EMAs
+        fast_ema = self._ema(self.closes, self.fast)
+        slow_ema = self._ema(self.closes, self.slow)
+        
+        if fast_ema is None or slow_ema is None:
+            return None, None
+        
+        macd = fast_ema - slow_ema
+        signal_line = self._ema([self._ema(self.closes[:i], self.fast) - self._ema(self.closes[:i], self.slow) 
+                                 for i in range(self.slow, len(self.closes) + 1)], self.signal_period)
+        
+        self.macd_values.append(macd)
+        
+        # Signal: GREEN if MACD crosses above signal line, RED if below
+        if len(self.macd_values) > 1:
+            if self.macd_values[-2] < signal_line and macd > signal_line:
+                signal = "GREEN"
+            elif self.macd_values[-2] > signal_line and macd < signal_line:
+                signal = "RED"
+            else:
+                signal = None
+        else:
+            signal = None
+        
+        return macd, signal
+
+
+class MovingAverage:
+    """Exponential Moving Average based entries"""
+    def __init__(self, fast_period=5, slow_period=20):
+        self.fast_period = fast_period
+        self.slow_period = slow_period
+        self.closes = []
+        self.fast_emas = []
+        self.slow_emas = []
+    
+    def reset(self):
+        self.closes = []
+        self.fast_emas = []
+        self.slow_emas = []
+    
+    def _ema(self, values, period):
+        """Calculate EMA"""
+        if len(values) < period:
+            return None
+        
+        alpha = 2 / (period + 1)
+        ema = sum(values[-period:]) / period
+        for val in values[-len(values)+period:]:
+            ema = val * alpha + ema * (1 - alpha)
+        return ema
+    
+    def add_candle(self, high, low, close):
+        """Add candle and calculate moving averages"""
+        self.closes.append(close)
+        
+        if len(self.closes) < self.slow_period:
+            return None, None
+        
+        fast_ema = self._ema(self.closes, self.fast_period)
+        slow_ema = self._ema(self.closes, self.slow_period)
+        
+        if fast_ema is None or slow_ema is None:
+            return None, None
+        
+        self.fast_emas.append(fast_ema)
+        self.slow_emas.append(slow_ema)
+        
+        # Signal: GREEN if fast > slow (uptrend), RED if fast < slow (downtrend)
+        if fast_ema > slow_ema:
+            signal = "GREEN"
+        elif fast_ema < slow_ema:
+            signal = "RED"
+        else:
+            signal = None
+        
+        return fast_ema, signal
+
+
+class BollingerBands:
+    """Bollinger Bands - Volatility based indicator"""
+    def __init__(self, period=20, num_std=2):
+        self.period = period
+        self.num_std = num_std
+        self.closes = []
+        self.bands = []
+    
+    def reset(self):
+        self.closes = []
+        self.bands = []
+    
+    def add_candle(self, high, low, close):
+        """Add candle and calculate Bollinger Bands"""
+        self.closes.append(close)
+        
+        if len(self.closes) < self.period:
+            return None, None
+        
+        # Calculate SMA and std dev
+        sma = sum(self.closes[-self.period:]) / self.period
+        variance = sum((c - sma) ** 2 for c in self.closes[-self.period:]) / self.period
+        std_dev = variance ** 0.5
+        
+        upper = sma + (std_dev * self.num_std)
+        lower = sma - (std_dev * self.num_std)
+        
+        self.bands.append({'upper': upper, 'lower': lower, 'middle': sma})
+        
+        # Signal: GREEN if close < lower (oversold), RED if close > upper (overbought)
+        if close < lower:
+            signal = "GREEN"
+        elif close > upper:
+            signal = "RED"
+        else:
+            signal = None
+        
+        return {'upper': upper, 'lower': lower, 'middle': sma}, signal
+
+
+class Stochastic:
+    """Stochastic Oscillator"""
+    def __init__(self, k_period=14, d_period=3):
+        self.k_period = k_period
+        self.d_period = d_period
+        self.highs = []
+        self.lows = []
+        self.closes = []
+        self.k_values = []
+    
+    def reset(self):
+        self.highs = []
+        self.lows = []
+        self.closes = []
+        self.k_values = []
+    
+    def add_candle(self, high, low, close):
+        """Add candle and calculate Stochastic"""
+        self.highs.append(high)
+        self.lows.append(low)
+        self.closes.append(close)
+        
+        if len(self.closes) < self.k_period:
+            return None, None
+        
+        # Calculate K%
+        highest = max(self.highs[-self.k_period:])
+        lowest = min(self.lows[-self.k_period:])
+        
+        k = ((close - lowest) / (highest - lowest) * 100) if (highest - lowest) > 0 else 50
+        self.k_values.append(k)
+        
+        # Calculate D% (SMA of K)
+        if len(self.k_values) < self.d_period:
+            return k, None
+        
+        d = sum(self.k_values[-self.d_period:]) / self.d_period
+        
+        # Signal: GREEN if K < 20 (oversold), RED if K > 80 (overbought)
+        if k < 20:
+            signal = "GREEN"
+        elif k > 80:
+            signal = "RED"
+        else:
+            signal = None
+        
+        return k, signal
+
+
+class ADX:
+    """Average Directional Index - Trend Strength"""
+    def __init__(self, period=14):
+        self.period = period
+        self.highs = []
+        self.lows = []
+        self.closes = []
+        self.adx_values = []
+    
+    def reset(self):
+        self.highs = []
+        self.lows = []
+        self.closes = []
+        self.adx_values = []
+    
+    def add_candle(self, high, low, close):
+        """Add candle and calculate ADX"""
+        self.highs.append(high)
+        self.lows.append(low)
+        self.closes.append(close)
+        
+        if len(self.closes) < self.period + 1:
+            return None, None
+        
+        # Calculate directional movements
+        plus_dm = max(0, high - self.highs[-2]) if len(self.highs) > 1 else 0
+        minus_dm = max(0, self.lows[-2] - low) if len(self.lows) > 1 else 0
+        
+        if plus_dm > minus_dm:
+            minus_dm = 0
+        elif minus_dm > plus_dm:
+            plus_dm = 0
+        
+        # Calculate ATR
+        tr = max(
+            high - low,
+            abs(high - self.closes[-2]) if len(self.closes) > 1 else 0,
+            abs(low - self.closes[-2]) if len(self.closes) > 1 else 0
+        )
+        
+        # Simple ADX calculation (simplified)
+        if len(self.closes) >= self.period * 2:
+            recent_high = max(self.highs[-self.period:])
+            recent_low = min(self.lows[-self.period:])
+            adx = abs(recent_high - recent_low) / (sum([max(self.highs[i] - self.lows[i], 
+                                                              abs(self.highs[i] - self.closes[i-1]) if i > 0 else 0,
+                                                              abs(self.lows[i] - self.closes[i-1]) if i > 0 else 0) 
+                                                        for i in range(-self.period, 0)]) / self.period + 0.001) * 100
+        else:
+            adx = 50  # Default middle value
+        
+        self.adx_values.append(adx)
+        
+        # Signal: GREEN if ADX > 25 (strong uptrend), RED if ADX < 25 but trending down
+        if adx > 25:
+            signal = "GREEN"  # Strong trend
+        else:
+            signal = "RED"  # Weak trend
+        
+        return adx, signal
+
+
+class SuperTrendMACD:
+    """Combined SuperTrend + MACD Strategy
+    
+    SuperTrend triggers the signal, MACD confirms the trend direction.
+    - When SuperTrend flips to GREEN: only trade if all 3 MACD values are positive
+    - When SuperTrend flips to RED: only trade if all 3 MACD values are negative
+    - Keep checking after each candle until conditions are met or signal flips
+    """
+    def __init__(self, supertrend_period=7, supertrend_mult=4, macd_fast=12, macd_slow=26, macd_signal=9):
+        self.supertrend = SuperTrend(period=supertrend_period, multiplier=supertrend_mult)
+        self.macd = MACD(fast=macd_fast, slow=macd_slow, signal=macd_signal)
+        self.last_st_direction = None  # Track last direction to detect flips
+        self.st_flip_signal = None  # Track the signal when ST flipped
+        self.histogram = []  # Track MACD histogram
+    
+    def reset(self):
+        """Reset both indicators"""
+        self.supertrend.reset()
+        self.macd.reset()
+        self.last_st_direction = None
+        self.st_flip_signal = None
+        self.histogram = []
+    
+    def add_candle(self, high, low, close):
+        """Add candle and validate SuperTrend signal with MACD confirmation"""
+        # Get SuperTrend value
+        st_value, st_signal = self.supertrend.add_candle(high, low, close)
+        
+        if st_value is None or st_signal is None:
+            return st_value, None
+        
+        # Get MACD values (includes histogram calculation)
+        macd_line, macd_signal_gen = self.macd.add_candle(high, low, close)
+        
+        if macd_line is None:
+            return st_value, None
+        
+        # Calculate MACD histogram and signal line
+        # We need to recalculate to get all 3 values
+        fast_ema = self.macd._ema(self.macd.closes, self.macd.fast)
+        slow_ema = self.macd._ema(self.macd.closes, self.macd.slow)
+        
+        if fast_ema is None or slow_ema is None:
+            return st_value, None
+        
+        macd_line = fast_ema - slow_ema
+        
+        # Calculate signal line properly
+        all_macd_lines = []
+        for i in range(self.macd.slow, len(self.macd.closes) + 1):
+            fast = self.macd._ema(self.macd.closes[:i], self.macd.fast)
+            slow = self.macd._ema(self.macd.closes[:i], self.macd.slow)
+            if fast and slow:
+                all_macd_lines.append(fast - slow)
+        
+        macd_signal_line = self.macd._ema(all_macd_lines, self.macd.signal_period) if len(all_macd_lines) >= self.macd.signal_period else None
+        
+        if macd_signal_line is None:
+            return st_value, None
+        
+        # Calculate histogram
+        histogram = macd_line - macd_signal_line
+        self.histogram.append(histogram)
+        
+        # Check if SuperTrend direction changed
+        current_direction = self.supertrend.direction
+        direction_changed = False
+        
+        if self.last_st_direction is None:
+            # First candle
+            self.last_st_direction = current_direction
+        elif self.last_st_direction != current_direction:
+            # Direction flip detected
+            direction_changed = True
+            self.last_st_direction = current_direction
+            self.st_flip_signal = "GREEN" if current_direction == 1 else "RED"
+        
+        # Determine final signal
+        final_signal = None
+        
+        if direction_changed:
+            # SuperTrend just flipped - check MACD confirmation
+            if self.st_flip_signal == "GREEN":
+                # For GREEN (bullish): all 3 MACD values must be positive
+                if macd_line > 0 and macd_signal_line > 0 and histogram > 0:
+                    final_signal = "GREEN"
+            elif self.st_flip_signal == "RED":
+                # For RED (bearish): all 3 MACD values must be negative
+                if macd_line < 0 and macd_signal_line < 0 and histogram < 0:
+                    final_signal = "RED"
+        else:
+            # SuperTrend hasn't flipped yet - keep checking MACD confirmation on each candle
+            if self.st_flip_signal is not None:
+                if self.st_flip_signal == "GREEN":
+                    # Still waiting for GREEN confirmation
+                    if macd_line > 0 and macd_signal_line > 0 and histogram > 0:
+                        final_signal = "GREEN"
+                elif self.st_flip_signal == "RED":
+                    # Still waiting for RED confirmation
+                    if macd_line < 0 and macd_signal_line < 0 and histogram < 0:
+                        final_signal = "RED"
+        
+        return st_value, final_signal

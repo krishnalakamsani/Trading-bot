@@ -54,6 +54,42 @@ Trading-Bot/
 
 ---
 
+## � Deployment (Docker - Recommended)
+
+**One-Command Deployment**:
+
+```bash
+# 1. Clone the repository
+git clone <your-repo-url>
+cd Trading-bot
+
+# 2. Create environment file
+cp .env.example .env
+
+# 3. Update .env with your server IP/domain
+# REACT_APP_BACKEND_URL=http://your-server-ip:8000
+
+# 4. Start the application
+docker-compose up -d --build
+
+# 5. Verify it's running
+docker-compose ps
+```
+
+**Access the Application**:
+- Frontend: `http://your-server-ip`
+- Backend API: `http://your-server-ip:8000/api`
+
+**Docker Commands**:
+```bash
+docker-compose logs -f              # View logs in real-time
+docker-compose stop                 # Stop containers
+docker-compose restart              # Restart containers
+docker-compose down                 # Stop and remove containers
+```
+
+---
+
 ## 🔧 Installation & Setup
 
 ### Backend Setup
@@ -84,9 +120,7 @@ echo "REACT_APP_BACKEND_URL=http://localhost:8000" > .env
 
 ---
 
-## 🚢 Deployment
-
-### Option 1: Local Development (Recommended for Testing)
+## 🚀 Local Development (Without Docker)
 
 **Terminal 1 - Backend**:
 ```bash
@@ -100,75 +134,7 @@ cd frontend
 npm start
 ```
 
-Access the app at: `http://localhost:3000`
-
-### Option 2: Docker Deployment (Production)
-
-**Requirements**:
-- Docker & Docker Compose installed
-
-**Steps**:
-
-1. **Create .env file**:
-```bash
-cp .env.example .env
-```
-
-2. **Update .env** with your IP/domain:
-```env
-REACT_APP_BACKEND_URL=http://your-server-ip:8000
-BACKEND_PORT=8000
-```
-
-3. **Start containers**:
-```bash
-docker-compose up -d --build
-```
-
-4. **Verify deployment**:
-```bash
-docker-compose ps
-docker-compose logs -f backend
-```
-
-**Access**:
-- Frontend: `http://your-server-ip`
-- API: `http://your-server-ip:8000/api`
-
-**Useful Docker Commands**:
-```bash
-docker-compose down          # Stop all containers
-docker-compose logs -f       # View logs
-docker-compose restart       # Restart containers
-docker cp <container>:/app/data/trading.db ./backup.db  # Backup DB
-```
-
-### Option 3: Systemd Service (Linux Production)
-
-Create `/etc/systemd/system/trading-bot.service`:
-```ini
-[Unit]
-Description=Trading Bot
-After=network.target
-
-[Service]
-Type=simple
-User=youruser
-WorkingDirectory=/path/to/Trading-bot/backend
-ExecStart=/usr/bin/python -m uvicorn server:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl start trading-bot
-sudo systemctl enable trading-bot
-```
+Access at: `http://localhost:3000`
 
 ---
 
@@ -290,30 +256,48 @@ sudo systemctl enable trading-bot
 
 ## 🐛 Troubleshooting
 
+**Docker containers not starting**:
+```bash
+# Check logs
+docker-compose logs backend
+docker-compose logs frontend
+
+# Rebuild containers
+docker-compose down
+docker-compose up -d --build
+```
+
+**Frontend says "Cannot connect to backend"**:
+- Verify backend is running: `docker-compose ps`
+- Check `REACT_APP_BACKEND_URL` in .env file
+- Ensure backend port 8000 is open in firewall
+- Restart: `docker-compose restart backend`
+
 **Bot won't connect to Dhan**:
 - Check credentials in Settings
-- Verify token hasn't expired
+- Verify Dhan token hasn't expired (refresh daily)
 - Check internet connection
+- View logs: `docker-compose logs -f backend`
 
 **Orders not placed**:
 - Are you in Paper or Live mode?
-- Is bot running (shows "Running")?
+- Is bot running (shows "Running" in top bar)?
 - Is it between 9:25 AM - 3:10 PM?
-- Check daily max loss triggered?
+- Check daily max loss triggered
 
 **Positions not closing**:
 - Check exit conditions being met
 - Use "Square Off" to force close
-- Check bot still running
+- Check bot still running: `docker-compose ps`
 
-**Analytics shows no trades**:
-- Only completed trades appear
-- Check a trade is actually exited
+**Database errors**:
+```bash
+# Backup existing database
+docker cp trading-bot-backend:/app/data/trading.db ./backup.db
 
-**Frontend won't load**:
-- Backend must be running on port 8000
-- Check `REACT_APP_BACKEND_URL` environment variable
-- Check firewall not blocking port 8000
+# Restart to reinitialize
+docker-compose restart backend
+```
 
 ---
 
@@ -352,15 +336,26 @@ sudo systemctl enable trading-bot
 
 ## 📄 Logs & Debugging
 
+**View live logs**:
 ```bash
-# Backend logs
-backend/logs/bot.log
+# All containers
+docker-compose logs -f
 
-# Docker logs
+# Backend only
 docker-compose logs -f backend
 
-# Real-time logs
-docker-compose logs --follow
+# Frontend only
+docker-compose logs -f frontend
+```
+
+**Access logs inside container**:
+```bash
+docker-compose exec backend cat logs/bot.log
+```
+
+**Copy logs from container**:
+```bash
+docker cp trading-bot-backend:/app/logs/bot.log ./bot.log
 ```
 
 Each log entry includes:
@@ -389,27 +384,29 @@ Each log entry includes:
 ## 📞 Quick Start Summary
 
 ```bash
-# 1. Install
-pip install -r backend/requirements.txt
-cd frontend && npm install
+# 1. Clone & Setup
+git clone <your-repo-url>
+cd Trading-bot
+cp .env.example .env
+# Edit .env: REACT_APP_BACKEND_URL=http://your-server-ip:8000
 
-# 2. Start Backend
-cd backend && python -m uvicorn server:app --reload
+# 2. Deploy with Docker
+docker-compose up -d --build
 
-# 3. Start Frontend
-cd frontend && npm start
+# 3. Verify
+docker-compose ps
 
-# 4. Open http://localhost:3000
+# 4. Open http://your-server-ip
 
 # 5. Settings → Add Dhan credentials
 
-# 6. Settings → Configure Risk
+# 6. Settings → Configure Risk parameters
 
 # 7. Click "Start Bot" → Select "Paper"
 
-# 8. Monitor trades
+# 8. Monitor trades on Dashboard
 
-# 9. Check Analytics page for statistics
+# 9. Check "Analysis" page for statistics
 ```
 
 ---
