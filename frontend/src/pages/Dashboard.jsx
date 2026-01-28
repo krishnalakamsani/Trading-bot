@@ -1,4 +1,5 @@
-import React, { useContext, useState } from "react";
+import React, { useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppContext } from "@/App";
 import TopBar from "@/components/TopBar";
 import PositionPanel from "@/components/PositionPanel";
@@ -7,11 +8,10 @@ import NiftyTracker from "@/components/NiftyTracker";
 import TradesTable from "@/components/TradesTable";
 import DailySummary from "@/components/DailySummary";
 import LogsViewer from "@/components/LogsViewer";
-import SettingsPanel from "@/components/SettingsPanel";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const context = useContext(AppContext);
-  const [showSettings, setShowSettings] = useState(false);
 
   if (!context) {
     return <div>Loading...</div>;
@@ -20,7 +20,7 @@ const Dashboard = () => {
   return (
     <div className="h-screen flex flex-col bg-white" data-testid="dashboard">
       {/* Top Bar */}
-      <TopBar onSettingsClick={() => setShowSettings(true)} />
+      <TopBar onSettingsClick={() => navigate("/settings")} />
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto p-4 lg:p-6">
@@ -44,11 +44,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
-      )}
     </div>
   );
 };

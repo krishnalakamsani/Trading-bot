@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import Dashboard from "@/pages/Dashboard";
 import TradesAnalysis from "@/pages/TradesAnalysis";
+import Settings from "@/pages/Settings";
 import "@/App.css";
 
 // Use environment variable or default to relative path for production
@@ -304,6 +305,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/analysis" element={<TradesAnalysis />} />
           </Routes>
         </BrowserRouter>
