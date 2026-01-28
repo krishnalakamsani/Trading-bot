@@ -46,9 +46,19 @@ const SettingsPanel = ({ onClose }) => {
   const [saving, setSaving] = useState(false);
   const isFirstRender = React.useRef(true);
 
+  // Debug log
+  React.useEffect(() => {
+    console.log("[SettingsPanel] Config received:", {
+      selected_index: config?.selected_index,
+      indicator_type: config?.indicator_type,
+      full_config_keys: Object.keys(config || {})
+    });
+  }, [config]);
+
   // Only sync on first mount, not on every config change to avoid overwriting user edits
   React.useEffect(() => {
     if (isFirstRender.current) {
+      console.log("[SettingsPanel] Initializing state from config");
       setOrderQty(config?.order_qty || 1);
       setMaxTrades(config?.max_trades_per_day || 5);
       setMaxLoss(config?.daily_max_loss || 2000);
@@ -60,6 +70,9 @@ const SettingsPanel = ({ onClose }) => {
       setRiskPerTrade(config?.risk_per_trade || 0);
       setSelectedIndex(config?.selected_index || "NIFTY");
       setIndicatorType(config?.indicator_type || "supertrend");
+      console.log("[SettingsPanel] State initialized:", {
+        indicatorType: config?.indicator_type || "supertrend"
+      });
       isFirstRender.current = false;
     }
   }, []); // Empty dependency array - only run once on mount
@@ -96,11 +109,13 @@ const SettingsPanel = ({ onClose }) => {
 
   const handleSaveStrategy = async () => {
     setSaving(true);
-    console.log("Saving strategy with:", { selected_index: selectedIndex, indicator_type: indicatorType });
-    await updateConfig({
+    const payload = {
       selected_index: selectedIndex,
       indicator_type: indicatorType,
-    });
+    };
+    console.log("[handleSaveStrategy] State values:", { selectedIndex, indicatorType });
+    console.log("[handleSaveStrategy] Sending payload:", payload);
+    await updateConfig(payload);
     setSaving(false);
   };
 
