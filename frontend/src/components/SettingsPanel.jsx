@@ -32,14 +32,14 @@ const SettingsPanel = ({ onClose }) => {
   const [orderQty, setOrderQty] = useState(config.order_qty);
   const [maxTrades, setMaxTrades] = useState(config.max_trades_per_day);
   const [maxLoss, setMaxLoss] = useState(config.daily_max_loss);
+  const [initialSL, setInitialSL] = useState(config.initial_stoploss || 0);
   const [trailStart, setTrailStart] = useState(config.trail_start_profit);
   const [trailStep, setTrailStep] = useState(config.trail_step);
-  const [trailDistance, setTrailDistance] = useState(config.trailing_sl_distance);
   const [targetPoints, setTargetPoints] = useState(config.target_points || 0);
+  const [riskPerTrade, setRiskPerTrade] = useState(config.risk_per_trade || 0);
 
   // Strategy Parameters
   const [selectedIndex, setSelectedIndex] = useState(config.selected_index || "NIFTY");
-  const [candleInterval, setCandleInterval] = useState(String(config.candle_interval || 5));
 
   const [saving, setSaving] = useState(false);
 
@@ -63,10 +63,11 @@ const SettingsPanel = ({ onClose }) => {
       order_qty: orderQty,
       max_trades_per_day: maxTrades,
       daily_max_loss: maxLoss,
+      initial_stoploss: initialSL,
       trail_start_profit: trailStart,
       trail_step: trailStep,
-      trailing_sl_distance: trailDistance,
       target_points: targetPoints,
+      risk_per_trade: riskPerTrade,
     });
     setSaving(false);
   };
@@ -75,7 +76,6 @@ const SettingsPanel = ({ onClose }) => {
     setSaving(true);
     await updateConfig({
       selected_index: selectedIndex,
-      candle_interval: parseInt(candleInterval),
     });
     setSaving(false);
   };
@@ -141,33 +141,13 @@ const SettingsPanel = ({ onClose }) => {
                   Lot size: {indexInfo.lot_size}, Strike: {indexInfo.strike_interval}
                 </p>
               </div>
-
-              <div>
-                <Label htmlFor="timeframe-select">Timeframe</Label>
-                <Select
-                  value={candleInterval}
-                  onValueChange={setCandleInterval}
-                >
-                  <SelectTrigger className="mt-1 rounded-sm" data-testid="settings-timeframe-select">
-                    <SelectValue placeholder="Select Timeframe" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeframes.map((tf) => (
-                      <SelectItem key={tf.value} value={String(tf.value)}>
-                        {tf.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-500 mt-1">
-                  SuperTrend candle interval
-                </p>
-              </div>
             </div>
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-800">
               <strong>Strategy:</strong> SuperTrend (7, 4) based entry/exit on selected index options.
               GREEN signal = Buy CE, RED signal = Buy PE.
+              <br />
+              <em className="text-xs mt-1">Tip: Select timeframe from Controls panel</em>
             </div>
 
             <div className="flex justify-end pt-2">
@@ -317,6 +297,34 @@ const SettingsPanel = ({ onClose }) => {
               </div>
 
               <div>
+                <Label htmlFor="initial-sl">Initial Stop Loss (points)</Label>
+                <Input
+                  id="initial-sl"
+                  type="number"
+                  min="0"
+                  value={initialSL}
+                  onChange={(e) => setInitialSL(parseFloat(e.target.value))}
+                  className="mt-1 rounded-sm"
+                  data-testid="initial-sl-input"
+                />
+                <p className="text-xs text-gray-500 mt-1">0 = disabled</p>
+              </div>
+
+              <div>
+                <Label htmlFor="risk-per-trade">Risk Per Trade (₹)</Label>
+                <Input
+                  id="risk-per-trade"
+                  type="number"
+                  min="0"
+                  value={riskPerTrade}
+                  onChange={(e) => setRiskPerTrade(parseFloat(e.target.value))}
+                  className="mt-1 rounded-sm"
+                  data-testid="risk-per-trade-input"
+                />
+                <p className="text-xs text-gray-500 mt-1">0 = uses fixed qty, else auto-sizes position</p>
+              </div>
+
+              <div>
                 <Label htmlFor="trail-start">Trail Start Profit</Label>
                 <Input
                   id="trail-start"
@@ -338,19 +346,6 @@ const SettingsPanel = ({ onClose }) => {
                   onChange={(e) => setTrailStep(parseFloat(e.target.value))}
                   className="mt-1 rounded-sm"
                   data-testid="trail-step-input"
-                />
-                <p className="text-xs text-gray-500 mt-1">Points</p>
-              </div>
-
-              <div>
-                <Label htmlFor="trail-distance">Trailing SL Distance</Label>
-                <Input
-                  id="trail-distance"
-                  type="number"
-                  value={trailDistance}
-                  onChange={(e) => setTrailDistance(parseFloat(e.target.value))}
-                  className="mt-1 rounded-sm"
-                  data-testid="trail-distance-input"
                 />
                 <p className="text-xs text-gray-500 mt-1">Points</p>
               </div>

@@ -69,7 +69,7 @@ async def load_config():
                         if key in ['order_qty', 'max_trades_per_day', 'candle_interval', 'supertrend_period', 'min_trade_gap']:
                             config[key] = int(value)
                         # Float fields
-                        elif key in ['daily_max_loss', 'trail_start_profit', 'trail_step', 'trailing_sl_distance', 'supertrend_multiplier', 'target_points']:
+                        elif key in ['daily_max_loss', 'initial_stoploss', 'trail_start_profit', 'trail_step', 'supertrend_multiplier', 'target_points', 'risk_per_trade']:
                             config[key] = float(value)
                         # Boolean fields
                         elif key in ['trade_only_on_flip']:

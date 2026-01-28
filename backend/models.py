@@ -8,10 +8,11 @@ class ConfigUpdate(BaseModel):
     order_qty: Optional[int] = None
     max_trades_per_day: Optional[int] = None
     daily_max_loss: Optional[float] = None
+    initial_stoploss: Optional[float] = None  # Fixed SL points below entry
     trail_start_profit: Optional[float] = None
     trail_step: Optional[float] = None
-    trailing_sl_distance: Optional[float] = None
     target_points: Optional[float] = None  # Target profit points for exit
+    risk_per_trade: Optional[float] = None  # Risk amount per trade for position sizing
     selected_index: Optional[str] = None
     candle_interval: Optional[int] = None  # Timeframe in seconds
     min_trade_gap: Optional[int] = None  # Minimum seconds between trades

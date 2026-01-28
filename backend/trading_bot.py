@@ -129,12 +129,21 @@ class TradingBot:
             
             try:
                 result = await self.dhan.place_order(security_id, "SELL", qty)
-                if result.get('orderId') or result.get('status') == 'success':
-                    logger.info(f"[ORDER] Exit order sent to Dhan | Order ID: {result.get('orderId', 'N/A')} | Security: {security_id}")
+                
+                if result.get('status') == 'success' and result.get('orderId'):
+                    logger.info(f"[ORDER] Exit order placed | OrderID: {result.get('orderId')} | Security: {security_id} | Qty: {qty}")
+                    # Use actual filled price if available
+                    actual_exit_price = result.get('price', 0)
+                    if actual_exit_price > 0:
+                        exit_price = actual_exit_price
                 else:
-                    logger.warning(f"[ORDER] Exit order failed: {result}")
+                    logger.warning(f"[ORDER] Exit order may have failed or not confirmed: {result}")
             except Exception as e:
-                logger.error(f"[ORDER] Error sending exit order: {e}")
+                logger.error(f"[ORDER] Error sending exit order: {e}", exc_info=True)
+        elif not security_id:
+            logger.warning(f"[WARNING] Cannot send exit order - security_id missing for {index_name} {option_type}")
+        elif bot_state['mode'] == 'paper':
+            logger.debug(f"[ORDER] Paper mode - skipping exit order to Dhan")
         
         # Update database
         await update_trade_exit(
@@ -243,6 +252,18 @@ class TradingBot:
                         if index_ltp < low:
                             low = index_ltp
                         close = index_ltp
+                    
+                    # Check SL/Target on EVERY TICK (responsive protection)
+                    if self.current_position and bot_state['current_option_ltp'] > 0:
+                        option_ltp = bot_state['current_option_ltp']
+                        tick_exit = await self.check_tick_sl(option_ltp)
+                        if tick_exit:
+                            # Position exited on tick, reset candle for next entry
+                            candle_start_time = datetime.now()
+                            high, low, close = 0, float('inf'), 0
+                            candle_number = 0
+                            await asyncio.sleep(1)
+                            continue
                 
                 # Check if candle is complete
                 elapsed = (datetime.now() - candle_start_time).total_seconds()
@@ -356,39 +377,53 @@ class TradingBot:
         })
     
     async def check_trailing_sl(self, current_ltp: float):
-        """Update trailing SL values - only trails profit, no initial SL"""
+        """Update SL values - initial fixed SL then trails profit using step-based method"""
         if not self.current_position:
             return
         
         profit_points = current_ltp - self.entry_price
         
-        # Track highest profit
+        # Track highest profit reached
         if profit_points > self.highest_profit:
             self.highest_profit = profit_points
         
-        # Skip trailing if trail_step is 0 or trail_start_profit is 0
+        # Step 1: Set initial fixed stoploss (if enabled)
+        initial_sl = config.get('initial_stoploss', 0)
+        if initial_sl > 0 and self.trailing_sl is None:
+            self.trailing_sl = self.entry_price - initial_sl
+            bot_state['trailing_sl'] = self.trailing_sl
+            logger.info(f"[SL] Initial SL set: {self.trailing_sl:.2f} ({initial_sl} pts below entry)")
+            return
+        
+        # Step 2: Start trailing SL after reaching trail_start_profit
         trail_start = config.get('trail_start_profit', 0)
         trail_step = config.get('trail_step', 0)
         
         if trail_start <= 0 or trail_step <= 0:
             return  # Trailing disabled
         
-        # Start trailing only after profit reaches trail_start_profit
-        if profit_points >= trail_start:
-            # Calculate how many trail steps we've moved
-            trail_levels = int((self.highest_profit - trail_start) / trail_step)
+        # Only start trailing after profit reaches trail_start_profit
+        if profit_points < trail_start:
+            return
+        
+        # Calculate trailing SL level: Entry + (steps × trail_step)
+        # Steps = (highest_profit - trail_start) / trail_step
+        trail_levels = int((self.highest_profit - trail_start) / trail_step)
+        new_sl = self.entry_price + (trail_levels * trail_step)
+        
+        # Always move SL up, never down (protect profit)
+        if self.trailing_sl is None or new_sl > self.trailing_sl:
+            old_sl = self.trailing_sl
+            self.trailing_sl = new_sl
+            bot_state['trailing_sl'] = self.trailing_sl
             
-            # New SL = Entry + (levels * trail_step)
-            new_sl = self.entry_price + (trail_levels * trail_step)
-            
-            if self.trailing_sl is None or new_sl > self.trailing_sl:
-                old_sl = self.trailing_sl
-                self.trailing_sl = new_sl
-                bot_state['trailing_sl'] = self.trailing_sl
-                if old_sl:
-                    logger.info(f"[SL] Trailing SL updated: {old_sl:.2f} → {new_sl:.2f} (Profit: {profit_points:.2f} pts)")
-                else:
-                    logger.info(f"[SL] Trailing started at: {new_sl:.2f} (Profit: {profit_points:.2f} pts)")
+            if old_sl and old_sl > (self.entry_price - initial_sl):
+                # This is a trailing update (not initial trigger)
+                logger.info(f"[SL] Trailing SL updated: {old_sl:.2f} → {new_sl:.2f} (Profit: {profit_points:.2f} pts)")
+            else:
+                # This is the first trailing activation
+                logger.info(f"[SL] Trailing started: {new_sl:.2f} (Profit: {profit_points:.2f} pts)")
+
     
     async def check_trailing_sl_on_close(self, current_ltp: float) -> bool:
         """Check if trailing SL or target is hit on candle close"""
@@ -527,7 +562,18 @@ class TradingBot:
         """Enter a new position"""
         index_name = config['selected_index']
         index_config = get_index_config(index_name)
-        qty = config['order_qty'] * index_config['lot_size']
+        
+        # Calculate position size based on risk (if enabled)
+        risk_per_trade = config.get('risk_per_trade', 0)
+        if risk_per_trade > 0 and config.get('initial_stoploss', 0) > 0:
+            # Position size = Risk Amount / (SL points * lot size * point value)
+            # For options: 1 point = 1 rupee per lot
+            sl_points = config['initial_stoploss']
+            max_qty = int(risk_per_trade / (sl_points * index_config['lot_size']))
+            qty = max(1, min(max_qty, config['order_qty']))  # Between 1 and order_qty
+            logger.info(f"[POSITION] Size adjusted for risk: {qty} lots (Risk: ₹{risk_per_trade}, SL: {sl_points}pts)")
+        else:
+            qty = config['order_qty'] * index_config['lot_size']
         
         trade_id = f"T{datetime.now().strftime('%Y%m%d%H%M%S')}"
         
@@ -594,17 +640,31 @@ class TradingBot:
             result = await self.dhan.place_order(security_id, "BUY", qty)
             logger.info(f"[ORDER] Entry order result: {result}")
             
-            if not result.get('orderId') and result.get('status') != 'success':
-                logger.error(f"[ERROR] Failed to place order: {result}")
+            # Check if order was successfully placed
+            if result.get('status') != 'success' or not result.get('orderId'):
+                logger.error(f"[ERROR] Failed to place entry order: {result}")
                 return
             
-            filled_price = result.get('price', 0) or result.get('averagePrice', 0)
+            # Use actual filled price if available, otherwise use last quoted price
+            filled_price = result.get('price', 0)
+            if filled_price <= 0:
+                filled_price = await self.dhan.get_option_ltp(
+                    security_id=security_id,
+                    strike=strike,
+                    option_type=option_type,
+                    expiry=expiry,
+                    index_name=index_name
+                )
+            
             if filled_price > 0:
                 entry_price = filled_price
+            else:
+                logger.warning(f"[WARNING] Could not get filled price for order, using default")
+                entry_price = entry_price or 0
             
             logger.info(
-                "[ENTRY] LIVE | %s %s %s | Expiry: %s | Price: %s | Qty: %s",
-                index_name, option_type, strike, expiry, entry_price, qty
+                "[ENTRY] LIVE | %s %s %s | Expiry: %s | OrderID: %s | Price: %s | Qty: %s",
+                index_name, option_type, strike, expiry, result.get('orderId'), entry_price, qty
             )
         
         # Save position

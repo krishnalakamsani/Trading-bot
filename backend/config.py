@@ -34,10 +34,13 @@ config = {
     "order_qty": 1,  # Number of lots (will be multiplied by lot_size)
     "max_trades_per_day": 5,
     "daily_max_loss": 2000,
-    "trail_start_profit": 10,
-    "trail_step": 5,
-    "trailing_sl_distance": 10,
+    # Stop Loss Parameters
+    "initial_stoploss": 50,  # Fixed SL points below entry (0 = disabled)
+    "trail_start_profit": 10,  # Profit points to start trailing
+    "trail_step": 5,  # Trailing step size
+    # Profit Taking
     "target_points": 0,  # Target profit points (0 = disabled)
+    # Signal & Indicator Settings
     "supertrend_period": 7,
     "supertrend_multiplier": 4,
     "candle_interval": 5,  # seconds (default 5s)
@@ -45,6 +48,7 @@ config = {
     # Trade protection settings
     "min_trade_gap": 0,  # Minimum seconds between trades (0 = disabled)
     "trade_only_on_flip": False,  # Only trade on SuperTrend direction change
+    "risk_per_trade": 0,  # Risk amount per trade (0 = disabled, uses fixed qty)
 }
 
 # SQLite Database path

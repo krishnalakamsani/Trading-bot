@@ -305,9 +305,45 @@ class DhanAPI:
                 product_type=self.dhan.INTRA,
                 price=0
             )
-            return response if response else {"status": "error", "message": "No response"}
+            
+            # Validate response
+            if not response:
+                logger.error(f"[ORDER] Empty response from Dhan API")
+                return {"status": "error", "message": "Empty response from Dhan"}
+            
+            logger.debug(f"[ORDER] Raw Dhan response: {response}")
+            
+            # Dhan API returns order details in response
+            # Check for success indicators
+            if isinstance(response, dict):
+                # Check if it's a success response (has order_id or status=success)
+                order_id = response.get('orderId') or response.get('order_id') or response.get('id')
+                status = response.get('status')
+                
+                if order_id:
+                    logger.info(f"[ORDER] Order placed successfully | Order ID: {order_id}")
+                    return {
+                        "status": "success",
+                        "orderId": order_id,
+                        "price": response.get('price') or response.get('averagePrice') or 0,
+                        "quantity": response.get('quantity') or qty,
+                        "data": response
+                    }
+                elif status == 'success':
+                    logger.info(f"[ORDER] Order placed successfully | Response: {response}")
+                    return {
+                        "status": "success",
+                        "orderId": response.get('data', {}).get('orderId', 'UNKNOWN'),
+                        "price": response.get('data', {}).get('price') or 0,
+                        "quantity": qty,
+                        "data": response
+                    }
+            
+            logger.error(f"[ORDER] Unexpected response format: {response}")
+            return {"status": "error", "message": f"Unexpected response: {response}"}
+            
         except Exception as e:
-            logger.error(f"Error placing order: {e}")
+            logger.error(f"[ORDER] Error placing order: {e}", exc_info=True)
             return {"status": "error", "message": str(e)}
     
     async def get_positions(self) -> list:

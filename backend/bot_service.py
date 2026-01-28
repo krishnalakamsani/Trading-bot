@@ -154,6 +154,11 @@ async def update_config_values(updates: dict) -> dict:
         config['daily_max_loss'] = float(updates['daily_max_loss'])
         updated_fields.append('daily_max_loss')
         
+    if updates.get('initial_stoploss') is not None:
+        config['initial_stoploss'] = float(updates['initial_stoploss'])
+        updated_fields.append('initial_stoploss')
+        logger.info(f"[CONFIG] Initial stoploss changed to: {config['initial_stoploss']} pts")
+        
     if updates.get('trail_start_profit') is not None:
         config['trail_start_profit'] = float(updates['trail_start_profit'])
         updated_fields.append('trail_start_profit')
@@ -161,15 +166,16 @@ async def update_config_values(updates: dict) -> dict:
     if updates.get('trail_step') is not None:
         config['trail_step'] = float(updates['trail_step'])
         updated_fields.append('trail_step')
-        
-    if updates.get('trailing_sl_distance') is not None:
-        config['trailing_sl_distance'] = float(updates['trailing_sl_distance'])
-        updated_fields.append('trailing_sl_distance')
     
     if updates.get('target_points') is not None:
         config['target_points'] = float(updates['target_points'])
         updated_fields.append('target_points')
         logger.info(f"[CONFIG] Target points changed to: {config['target_points']}")
+        
+    if updates.get('risk_per_trade') is not None:
+        config['risk_per_trade'] = float(updates['risk_per_trade'])
+        updated_fields.append('risk_per_trade')
+        logger.info(f"[CONFIG] Risk per trade changed to: ₹{config['risk_per_trade']}")
         
     if updates.get('selected_index') is not None:
         new_index = updates['selected_index'].upper()
