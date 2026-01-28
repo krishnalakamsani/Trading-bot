@@ -11,17 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 
 const ControlsPanel = () => {
   const { 
@@ -186,41 +175,20 @@ const ControlsPanel = () => {
         </div>
 
         {/* Square Off Button */}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              disabled={!position?.has_position || loading.squareoff}
-              variant="destructive"
-              className="w-full h-10 rounded-sm btn-active"
-              data-testid="squareoff-btn"
-            >
-              {loading.squareoff ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <XCircle className="w-4 h-4 mr-2" />
-              )}
-              Square Off Now
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Square Off</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will immediately close your current position at market
-                price. Are you sure you want to proceed?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleSquareOff}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Square Off
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          disabled={!position?.has_position || loading.squareoff}
+          variant="destructive"
+          className="w-full h-10 rounded-sm btn-active"
+          data-testid="squareoff-btn"
+          onClick={handleSquareOff}
+        >
+          {loading.squareoff ? (
+            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <XCircle className="w-4 h-4 mr-2" />
+          )}
+          Square Off Now
+        </Button>
 
         {/* Mode Toggle */}
         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-sm border border-gray-100">
