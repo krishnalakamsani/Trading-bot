@@ -443,13 +443,13 @@ class SuperTrendMACD:
         st_value, st_signal = self.supertrend.add_candle(high, low, close)
         
         if st_value is None or st_signal is None:
-            return st_value, None
+            return st_value, None, 0.0
         
         # Get MACD values (includes histogram calculation)
         macd_line, macd_signal_gen = self.macd.add_candle(high, low, close)
         
         if macd_line is None:
-            return st_value, None
+            return st_value, None, 0.0
         
         # Calculate MACD histogram and signal line
         # We need to recalculate to get all 3 values
@@ -457,7 +457,7 @@ class SuperTrendMACD:
         slow_ema = self.macd._ema(self.macd.closes, self.macd.slow)
         
         if fast_ema is None or slow_ema is None:
-            return st_value, None
+            return st_value, None, 0.0
         
         macd_line = fast_ema - slow_ema
         
@@ -472,7 +472,7 @@ class SuperTrendMACD:
         macd_signal_line = self.macd._ema(all_macd_lines, self.macd.signal_period) if len(all_macd_lines) >= self.macd.signal_period else None
         
         if macd_signal_line is None:
-            return st_value, None
+            return st_value, None, macd_line
         
         # Calculate histogram
         histogram = macd_line - macd_signal_line
