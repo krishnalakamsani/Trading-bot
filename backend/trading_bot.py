@@ -166,39 +166,42 @@ class TradingBot:
         strike = self.current_position.get('strike', 0)
         security_id = self.current_position.get('security_id', '')
         
-        # Send exit order to Dhan (only in live mode)
+        # Send exit order to Dhan - MUST place order before updating DB
+        exit_order_placed = False
         if bot_state['mode'] != 'paper' and self.dhan and security_id:
             index_config = get_index_config(index_name)
             qty = config['order_qty'] * index_config['lot_size']
             
             try:
+                logger.info(f"[ORDER] Placing EXIT SELL order | Trade ID: {trade_id} | Security: {security_id} | Qty: {qty}")
                 result = await self.dhan.place_order(security_id, "SELL", qty)
                 
                 if result.get('status') == 'success' and result.get('orderId'):
                     order_id = result.get('orderId')
-                    logger.info(f"[ORDER] Exit order placed | OrderID: {order_id} | Security: {security_id} | Qty: {qty}")
+                    exit_order_placed = True
+                    logger.info(f"[ORDER] ✓ EXIT order PLACED | OrderID: {order_id} | Security: {security_id} | Qty: {qty}")
                     
                     # CRITICAL: Verify exit order was actually filled
                     fill_status = await self.dhan.verify_order_filled(order_id, security_id, qty, timeout_seconds=15)
                     
                     if fill_status.get('filled'):
-                        logger.info(f"[ORDER] Exit order FILLED | Average Price: {fill_status.get('average_price')} | Message: {fill_status.get('message')}")
+                        logger.info(f"[ORDER] ✓ EXIT order FILLED | Average Price: {fill_status.get('average_price')} | Trade: {trade_id}")
                         # Use actual filled price
                         actual_exit_price = fill_status.get('average_price', 0)
                         if actual_exit_price > 0:
                             exit_price = actual_exit_price
                     else:
-                        logger.warning(f"[ORDER] Exit order NOT filled | Status: {fill_status.get('status')} | Message: {fill_status.get('message')}")
+                        logger.warning(f"[ORDER] ⚠ EXIT order NOT filled | OrderID: {order_id} | Status: {fill_status.get('status')}")
                 else:
-                    logger.warning(f"[ORDER] Exit order may have failed or not confirmed: {result}")
+                    logger.error(f"[ORDER] ✗ EXIT order FAILED | Trade: {trade_id} | Result: {result}")
             except Exception as e:
-                logger.error(f"[ORDER] Error sending exit order: {e}", exc_info=True)
+                logger.error(f"[ORDER] ✗ Error placing EXIT order: {e} | Trade: {trade_id}", exc_info=True)
         elif not security_id:
-            logger.warning(f"[WARNING] Cannot send exit order - security_id missing for {index_name} {option_type}")
+            logger.warning(f"[WARNING] Cannot send exit order - security_id missing for {index_name} {option_type} | Trade: {trade_id}")
         elif bot_state['mode'] == 'paper':
-            logger.debug(f"[ORDER] Paper mode - skipping exit order to Dhan")
+            logger.info(f"[ORDER] Paper mode - EXIT order not placed to Dhan (simulated) | Trade: {trade_id}")
         
-        # Update database
+        # Update database with exit details
         await update_trade_exit(
             trade_id=trade_id,
             exit_time=datetime.now(timezone.utc).isoformat(),
@@ -233,7 +236,7 @@ class TradingBot:
         self.trailing_sl = None
         self.highest_profit = 0
         
-        logger.info(f"[EXIT] {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl:.2f} | Wait for signal flip")
+        logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl:.2f} | Order Placed: {exit_order_placed}")
     
     async def run_loop(self):
         """Main trading loop"""

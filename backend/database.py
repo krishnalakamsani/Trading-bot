@@ -181,7 +181,7 @@ async def get_trades(limit: int = None) -> list:
         return [dict(row) for row in rows]
 
 async def get_trade_analytics() -> dict:
-    """Get comprehensive trade analytics"""
+    """Get comprehensive trade analytics with advanced metrics"""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         
@@ -207,6 +207,9 @@ async def get_trade_analytics() -> dict:
                 'max_loss': 0,
                 'avg_trade_pnl': 0,
                 'trades_by_type': {},
+                'trades_by_index': {},
+                'trades_by_exit_reason': {},
+                'drawdown_analysis': {},
                 'trades': []
             }
         
@@ -227,6 +230,47 @@ async def get_trade_analytics() -> dict:
         profit_factor = total_profit / total_loss if total_loss > 0 else (total_profit if total_profit > 0 else 0)
         avg_trade_pnl = total_pnl / total_trades if total_trades > 0 else 0
         
+        # Calculate standard deviation and Sharpe ratio
+        if len(trades) > 1:
+            pnls = [t['pnl'] for t in trades]
+            mean_pnl = sum(pnls) / len(pnls)
+            variance = sum((x - mean_pnl) ** 2 for x in pnls) / len(pnls)
+            std_dev = variance ** 0.5
+            sharpe_ratio = (avg_trade_pnl / std_dev) if std_dev > 0 else 0
+        else:
+            std_dev = 0
+            sharpe_ratio = 0
+        
+        # Calculate consecutive wins/losses
+        max_consecutive_wins = 0
+        max_consecutive_losses = 0
+        current_wins = 0
+        current_losses = 0
+        
+        for trade in trades:
+            if trade['pnl'] > 0:
+                current_wins += 1
+                max_consecutive_wins = max(max_consecutive_wins, current_wins)
+                current_losses = 0
+            else:
+                current_losses += 1
+                max_consecutive_losses = max(max_consecutive_losses, current_losses)
+                current_wins = 0
+        
+        # Calculate running maximum and drawdown
+        running_pnl = 0
+        running_max = 0
+        max_drawdown = 0
+        drawdown_values = []
+        
+        for trade in reversed(trades):  # Process in chronological order
+            running_pnl += trade['pnl']
+            if running_pnl > running_max:
+                running_max = running_pnl
+            current_drawdown = running_max - running_pnl
+            max_drawdown = max(max_drawdown, current_drawdown)
+            drawdown_values.append(current_drawdown)
+        
         # Trades by option type
         trades_by_type = {}
         for trade in trades:
@@ -234,6 +278,33 @@ async def get_trade_analytics() -> dict:
             if opt_type not in trades_by_type:
                 trades_by_type[opt_type] = []
             trades_by_type[opt_type].append(trade)
+        
+        # Trades by index
+        trades_by_index = {}
+        for trade in trades:
+            index = trade.get('index_name', 'UNKNOWN')
+            if index not in trades_by_index:
+                trades_by_index[index] = []
+            trades_by_index[index].append(trade)
+        
+        # Trades by exit reason
+        trades_by_exit_reason = {}
+        for trade in trades:
+            reason = trade.get('exit_reason', 'Unknown')
+            if reason not in trades_by_exit_reason:
+                trades_by_exit_reason[reason] = []
+            trades_by_exit_reason[reason].append(trade)
+        
+        # Group by day for daily stats
+        daily_stats = {}
+        for trade in trades:
+            entry_date = trade['entry_time'].split('T')[0] if trade['entry_time'] else 'Unknown'
+            if entry_date not in daily_stats:
+                daily_stats[entry_date] = {'trades': 0, 'pnl': 0, 'wins': 0}
+            daily_stats[entry_date]['trades'] += 1
+            daily_stats[entry_date]['pnl'] += trade['pnl']
+            if trade['pnl'] > 0:
+                daily_stats[entry_date]['wins'] += 1
         
         return {
             'total_trades': total_trades,
@@ -247,6 +318,14 @@ async def get_trade_analytics() -> dict:
             'max_profit': round(max((t['pnl'] for t in trades), default=0), 2),
             'max_loss': round(min((t['pnl'] for t in trades), default=0), 2),
             'avg_trade_pnl': round(avg_trade_pnl, 2),
+            'std_dev': round(std_dev, 2),
+            'sharpe_ratio': round(sharpe_ratio, 2),
+            'max_consecutive_wins': max_consecutive_wins,
+            'max_consecutive_losses': max_consecutive_losses,
+            'max_drawdown': round(max_drawdown, 2),
+            'avg_drawdown': round(sum(drawdown_values) / len(drawdown_values), 2) if drawdown_values else 0,
+            'trading_days': len(daily_stats),
+            'avg_trades_per_day': round(total_trades / len(daily_stats), 2) if daily_stats else 0,
             'trades_by_type': {
                 opt_type: {
                     'count': len(type_trades),
@@ -255,6 +334,23 @@ async def get_trade_analytics() -> dict:
                 }
                 for opt_type, type_trades in trades_by_type.items()
             },
+            'trades_by_index': {
+                index: {
+                    'count': len(index_trades),
+                    'pnl': round(sum(t['pnl'] for t in index_trades), 2),
+                    'win_rate': round(len([t for t in index_trades if t['pnl'] > 0]) / len(index_trades) * 100, 2) if index_trades else 0
+                }
+                for index, index_trades in trades_by_index.items()
+            },
+            'trades_by_exit_reason': {
+                reason: {
+                    'count': len(reason_trades),
+                    'pnl': round(sum(t['pnl'] for t in reason_trades), 2),
+                    'win_rate': round(len([t for t in reason_trades if t['pnl'] > 0]) / len(reason_trades) * 100, 2) if reason_trades else 0
+                }
+                for reason, reason_trades in trades_by_exit_reason.items()
+            },
+            'daily_stats': daily_stats,
             'trades': trades
         }
 async def save_candle_data(candle_number: int, index_name: str, high: float, low: float, close: float, 

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Button } from '../components/ui/button';
 import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Calendar, RefreshCw, Filter, X } from 'lucide-react';
+import AnalyticsMetrics from '../components/AnalyticsMetrics';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -381,6 +382,9 @@ const TradesAnalysis = () => {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
+            {/* Advanced Analytics Metrics */}
+            {analytics && <AnalyticsMetrics analytics={analytics} />}
+
             {/* Key Statistics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard

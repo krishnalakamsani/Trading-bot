@@ -8,33 +8,48 @@ def get_ist_time():
     return ist
 
 def is_market_open():
-    """Check if market is open (9:15 AM - 3:30 PM IST)"""
+    """Check if market is open (9:15 AM - 3:30 PM IST, Monday-Friday)"""
     from config import config
     if config.get('bypass_market_hours', False):
         return True  # Always return True when testing mode is enabled
     
     ist = get_ist_time()
+    
+    # Check if it's a weekday (Monday=0 to Friday=4, Saturday=5, Sunday=6)
+    if ist.weekday() >= 5:  # Saturday or Sunday
+        return False
+    
     market_open = ist.replace(hour=9, minute=15, second=0, microsecond=0)
     market_close = ist.replace(hour=15, minute=30, second=0, microsecond=0)
-    return market_open <= ist <= market_close and ist.weekday() < 5
+    return market_open <= ist <= market_close
 
 def can_take_new_trade():
-    """Check if new trades are allowed (before 3:20 PM IST)"""
+    """Check if new trades are allowed (before 3:20 PM IST, weekday only)"""
     from config import config
     if config.get('bypass_market_hours', False):
         return True  # Always allow new trades in testing mode
     
     ist = get_ist_time()
+    
+    # Check if it's a weekday
+    if ist.weekday() >= 5:  # Saturday or Sunday
+        return False
+    
     cutoff_time = ist.replace(hour=15, minute=20, second=0, microsecond=0)
     return ist < cutoff_time
 
 def should_force_squareoff():
-    """Check if it's time to force square off (3:25 PM IST)"""
+    """Check if it's time to force square off (3:25 PM IST, weekday only)"""
     from config import config
     if config.get('bypass_market_hours', False):
         return False  # Never force squareoff in testing mode
     
     ist = get_ist_time()
+    
+    # Check if it's a weekday
+    if ist.weekday() >= 5:  # Saturday or Sunday
+        return False
+    
     squareoff_time = ist.replace(hour=15, minute=25, second=0, microsecond=0)
     return ist >= squareoff_time
 

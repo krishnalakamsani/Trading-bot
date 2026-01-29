@@ -87,7 +87,7 @@ function App() {
         axios.get(`${API}/status`),
         axios.get(`${API}/market/nifty`),
         axios.get(`${API}/position`),
-        axios.get(`${API}/trades?limit=50`),
+        axios.get(`${API}/trades`),  // Fetch all trades without limit
         axios.get(`${API}/summary`),
         axios.get(`${API}/logs?limit=100`),
         axios.get(`${API}/config`),

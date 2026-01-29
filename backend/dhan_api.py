@@ -294,8 +294,9 @@ class DhanAPI:
         return 0
     
     async def place_order(self, security_id: str, transaction_type: str, qty: int) -> dict:
-        """Place a market order"""
+        """Place a market order synchronously (Dhan API is synchronous)"""
         try:
+            # Dhan API is synchronous, call it directly
             response = self.dhan.place_order(
                 security_id=security_id,
                 exchange_segment=self.dhan.NSE_FNO,
@@ -308,10 +309,10 @@ class DhanAPI:
             
             # Validate response
             if not response:
-                logger.error(f"[ORDER] Empty response from Dhan API")
-                return {"status": "error", "message": "Empty response from Dhan"}
+                logger.error(f"[ORDER] Empty response from Dhan API for {transaction_type} order, qty={qty}")
+                return {"status": "error", "message": "Empty response from Dhan", "orderId": None}
             
-            logger.debug(f"[ORDER] Raw Dhan response: {response}")
+            logger.debug(f"[ORDER] Raw Dhan {transaction_type} response: {response}")
             
             # Dhan API returns order details in response
             # Check for success indicators
@@ -321,7 +322,7 @@ class DhanAPI:
                 status = response.get('status')
                 
                 if order_id:
-                    logger.info(f"[ORDER] Order placed successfully | Order ID: {order_id}")
+                    logger.info(f"[ORDER] {transaction_type} order placed successfully | Order ID: {order_id} | Security: {security_id} | Qty: {qty}")
                     return {
                         "status": "success",
                         "orderId": order_id,
@@ -330,7 +331,7 @@ class DhanAPI:
                         "data": response
                     }
                 elif status == 'success':
-                    logger.info(f"[ORDER] Order placed successfully | Response: {response}")
+                    logger.info(f"[ORDER] {transaction_type} order placed successfully | Response: {response}")
                     return {
                         "status": "success",
                         "orderId": response.get('data', {}).get('orderId', 'UNKNOWN'),
@@ -339,12 +340,12 @@ class DhanAPI:
                         "data": response
                     }
             
-            logger.error(f"[ORDER] Unexpected response format: {response}")
-            return {"status": "error", "message": f"Unexpected response: {response}"}
+            logger.error(f"[ORDER] Unexpected response format for {transaction_type}: {response}")
+            return {"status": "error", "message": f"Unexpected response: {response}", "orderId": None}
             
         except Exception as e:
-            logger.error(f"[ORDER] Error placing order: {e}", exc_info=True)
-            return {"status": "error", "message": str(e)}
+            logger.error(f"[ORDER] Error placing {transaction_type} order: {e}", exc_info=True)
+            return {"status": "error", "message": str(e), "orderId": None}
     
     async def get_positions(self) -> list:
         """Get current positions"""
