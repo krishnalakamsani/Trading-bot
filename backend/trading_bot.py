@@ -547,8 +547,7 @@ class TradingBot:
         if target_points > 0 and profit_points >= target_points:
             pnl = profit_points * qty
             logger.info(
-                "[EXIT] Target hit | LTP=%.2f | Entry=%.2f | Profit=%.2f pts | Target=%.2f pts",
-                current_ltp, self.entry_price, profit_points, target_points
+                f"[EXIT] Target hit | LTP={current_ltp:.2f} | Entry={self.entry_price:.2f} | Profit={profit_points:.2f} pts | Target={target_points:.2f} pts"
             )
             await self.close_position(current_ltp, pnl, "Target Hit")
             return True
@@ -559,7 +558,7 @@ class TradingBot:
         # Check trailing SL
         if self.trailing_sl and current_ltp <= self.trailing_sl:
             pnl = (current_ltp - self.entry_price) * qty
-            logger.info("[EXIT] Trailing SL hit | LTP=%.2f | SL=%.2f", current_ltp, self.trailing_sl)
+            logger.info(f"[EXIT] Trailing SL hit | LTP={current_ltp:.2f} | SL={self.trailing_sl:.2f}")
             await self.close_position(current_ltp, pnl, "Trailing SL Hit")
             return True
         
@@ -579,8 +578,7 @@ class TradingBot:
         max_loss_per_trade = config.get('max_loss_per_trade', 0)
         if max_loss_per_trade > 0 and pnl < -max_loss_per_trade:
             logger.info(
-                "[EXIT] Max loss per trade hit | LTP=%.2f | Entry=%.2f | Loss=₹%.2f | Limit=₹%.2f",
-                current_ltp, self.entry_price, abs(pnl), max_loss_per_trade
+                f"[EXIT] Max loss per trade hit | LTP={current_ltp:.2f} | Entry={self.entry_price:.2f} | Loss=₹{abs(pnl):.2f} | Limit=₹{max_loss_per_trade:.2f}"
             )
             await self.close_position(current_ltp, pnl, "Max Loss Per Trade")
             return True
@@ -589,8 +587,7 @@ class TradingBot:
         target_points = config.get('target_points', 0)
         if target_points > 0 and profit_points >= target_points:
             logger.info(
-                "[EXIT] Target hit (tick) | LTP=%.2f | Entry=%.2f | Profit=%.2f pts | Target=%.2f pts",
-                current_ltp, self.entry_price, profit_points, target_points
+                f"[EXIT] Target hit (tick) | LTP={current_ltp:.2f} | Entry={self.entry_price:.2f} | Profit={profit_points:.2f} pts | Target={target_points:.2f} pts"
             )
             await self.close_position(current_ltp, pnl, "Target Hit")
             return True
@@ -601,7 +598,7 @@ class TradingBot:
         # Check if trailing SL is breached
         if self.trailing_sl and current_ltp <= self.trailing_sl:
             pnl = (current_ltp - self.entry_price) * qty
-            logger.info("[EXIT] Trailing SL hit (tick) | LTP=%.2f | SL=%.2f", current_ltp, self.trailing_sl)
+            logger.info(f"[EXIT] Trailing SL hit (tick) | LTP={current_ltp:.2f} | SL={self.trailing_sl:.2f}")
             await self.close_position(current_ltp, pnl, "Trailing SL Hit")
             return True
         
@@ -618,7 +615,12 @@ class TradingBot:
         # Exit based on SuperTrend direction, regardless of MACD confirmation
         if self.current_position:
             position_type = self.current_position.get('option_type', '')
-            st_direction = self.indicator.supertrend.direction  # 1=GREEN (up), -1=RED (down)
+            # Safe access to supertrend direction with fallback
+            st_direction = 0
+            if hasattr(self.indicator, 'st_direction'):
+                st_direction = self.indicator.st_direction
+            elif hasattr(self.indicator, 'supertrend') and hasattr(self.indicator.supertrend, 'direction'):
+                st_direction = self.indicator.supertrend.direction
             
             if position_type == 'CE' and st_direction == -1:  # Holding CE but ST flipped RED
                 exit_price = bot_state['current_option_ltp']
@@ -644,7 +646,7 @@ class TradingBot:
             return exited
         
         if bot_state['daily_trades'] >= config['max_trades_per_day']:
-            logger.info("[SIGNAL] Max daily trades reached (%d)", config['max_trades_per_day'])
+            logger.info(f"[SIGNAL] Max daily trades reached ({config['max_trades_per_day']})")
             return exited
         
         # Check min_trade_gap protection (optional)
@@ -652,7 +654,7 @@ class TradingBot:
         if min_gap > 0 and self.last_trade_time:
             time_since_last = (datetime.now() - self.last_trade_time).total_seconds()
             if time_since_last < min_gap:
-                logger.debug("[SIGNAL] Skipping - min trade gap not met (%.1fs < %ds)", time_since_last, min_gap)
+                logger.debug(f"[SIGNAL] Skipping - min trade gap not met ({time_since_last:.1f}s < {min_gap}s)")
                 return exited
         
         # Enter new position
@@ -747,8 +749,7 @@ class TradingBot:
                 entry_price = round(entry_price, 2)
             
             logger.info(
-                "[ENTRY] PAPER | %s %s %s | Expiry: %s | Price: %s | Qty: %s",
-                index_name, option_type, strike, expiry, entry_price, qty
+                f"[ENTRY] PAPER | {index_name} {option_type} {strike} | Expiry: {expiry} | Price: {entry_price} | Qty: {qty}"
             )
         
         # Live mode
@@ -792,8 +793,7 @@ class TradingBot:
             entry_price = filled_price or entry_price or 0
             
             logger.info(
-                "[ENTRY] LIVE | %s %s %s | Expiry: %s | OrderID: %s | Fill Price: %s | Qty: %s",
-                index_name, option_type, strike, expiry, order_id, entry_price, qty
+                f"[ENTRY] LIVE | {index_name} {option_type} {strike} | Expiry: {expiry} | OrderID: {order_id} | Fill Price: {entry_price} | Qty: {qty}"
             )
         
         # Save position
