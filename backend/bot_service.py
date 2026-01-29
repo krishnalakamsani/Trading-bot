@@ -66,6 +66,8 @@ def get_market_data() -> dict:
         "ltp": bot_state['index_ltp'],
         "supertrend_signal": bot_state['last_supertrend_signal'],
         "supertrend_value": bot_state['supertrend_value'],
+        "macd_value": bot_state['macd_value'],
+        "signal_status": bot_state['signal_status'],
         "selected_index": config['selected_index'],
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

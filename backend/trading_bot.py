@@ -325,24 +325,31 @@ class TradingBot:
                     candle_number += 1
                     
                     if high > 0 and low < float('inf'):
-                        indicator_value, signal = self.indicator.add_candle(high, low, close)
+                        indicator_value, signal, macd_value = self.indicator.add_candle(high, low, close)
                         
-                        # Always update SuperTrend value, even if no trade signal yet
+                        # Always update SuperTrend value and MACD value
                         if indicator_value:
                             bot_state['supertrend_value'] = indicator_value if isinstance(indicator_value, (int, float)) else str(indicator_value)
-                        
-                        if signal:
-                            bot_state['last_supertrend_signal'] = signal
+                            bot_state['macd_value'] = macd_value if isinstance(macd_value, (int, float)) else 0.0
                             
-                            # Detailed candle close log
+                            # Update signal status
+                            if signal:
+                                bot_state['signal_status'] = signal.lower()  # "buy" or "sell"
+                            else:
+                                bot_state['signal_status'] = "waiting"
+                            
+                            # Always log candle close with indicator values
                             indicator_name = config.get('indicator_type', 'supertrend_macd')
+                            signal_status = f"Signal={signal}" if signal else "Waiting for MACD confirmation"
                             logger.info(
                                 f"[CANDLE CLOSE #{candle_number}] {index_name} | "
                                 f"H={high:.2f} L={low:.2f} C={close:.2f} | "
-                                f"{indicator_name.upper()}={indicator_value} | "
-                                f"Signal={signal} | "
-                                f"Interval={format_timeframe(candle_interval)}"
+                                f"ST={indicator_value:.2f} | MACD={macd_value:.4f} | "
+                                f"{signal_status}"
                             )
+                        
+                        if signal:
+                            bot_state['last_supertrend_signal'] = signal
                             
                             # Check trailing SL/Target on candle close ONLY
                             if self.current_position:

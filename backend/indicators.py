@@ -497,10 +497,16 @@ class SuperTrendMACD:
                 # For GREEN (bullish): all 3 MACD values must be positive
                 if macd_line > 0 and macd_signal_line > 0 and histogram > 0:
                     final_signal = "GREEN"
+                    logger.info(f"[SIGNAL] SuperTrend flipped GREEN + MACD confirmed (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
+                else:
+                    logger.debug(f"[SIGNAL] SuperTrend flipped GREEN but MACD not aligned (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
             elif self.st_flip_signal == "RED":
                 # For RED (bearish): all 3 MACD values must be negative
                 if macd_line < 0 and macd_signal_line < 0 and histogram < 0:
                     final_signal = "RED"
+                    logger.info(f"[SIGNAL] SuperTrend flipped RED + MACD confirmed (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
+                else:
+                    logger.debug(f"[SIGNAL] SuperTrend flipped RED but MACD not aligned (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
         else:
             # SuperTrend hasn't flipped yet - keep checking MACD confirmation on each candle
             if self.st_flip_signal is not None:
@@ -508,9 +514,11 @@ class SuperTrendMACD:
                     # Still waiting for GREEN confirmation
                     if macd_line > 0 and macd_signal_line > 0 and histogram > 0:
                         final_signal = "GREEN"
+                        logger.info(f"[SIGNAL] GREEN signal confirmed after SuperTrend flip (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
                 elif self.st_flip_signal == "RED":
                     # Still waiting for RED confirmation
                     if macd_line < 0 and macd_signal_line < 0 and histogram < 0:
                         final_signal = "RED"
+                        logger.info(f"[SIGNAL] RED signal confirmed after SuperTrend flip (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
         
-        return st_value, final_signal
+        return st_value, final_signal, macd_line

@@ -113,9 +113,29 @@ const NiftyTracker = () => {
             </p>
           </div>
 
+          <div>
+            <p className="label-text">MACD Value</p>
+            <p
+              className="text-lg font-mono tracking-tight"
+              style={{ color: marketData.macd_value > 0 ? "#059669" : "#DC2626" }}
+              data-testid="macd-value"
+            >
+              {marketData.macd_value !== undefined && marketData.macd_value !== null
+                ? marketData.macd_value.toFixed(4)
+                : "—"}
+            </p>
+          </div>
+
           <div className="ml-auto text-right">
-            <p className="label-text">Last Update</p>
-            <p className="text-sm font-mono text-gray-600">
+            <p className="label-text">Signal Status</p>
+            <p className={`text-sm font-mono font-bold uppercase ${
+              marketData.signal_status === 'buy' ? 'text-green-600' :
+              marketData.signal_status === 'sell' ? 'text-red-600' :
+              'text-gray-600'
+            }`}>
+              {marketData.signal_status || "waiting"}
+            </p>
+            <p className="text-xs font-mono text-gray-500 mt-1">
               {new Date().toLocaleTimeString("en-IN")}
             </p>
           </div>

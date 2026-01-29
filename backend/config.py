@@ -20,6 +20,8 @@ bot_state = {
     "last_supertrend_signal": None,
     "index_ltp": 0.0,
     "supertrend_value": 0.0,
+    "macd_value": 0.0,  # MACD line value
+    "signal_status": "waiting",  # waiting, buy (GREEN), sell (RED)
     "trailing_sl": None,
     "entry_price": 0.0,
     "current_option_ltp": 0.0,
