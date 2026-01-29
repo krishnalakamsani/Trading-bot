@@ -36,6 +36,8 @@ config = {
     "order_qty": 1,  # Number of lots (will be multiplied by lot_size)
     "max_trades_per_day": 5,
     "daily_max_loss": 2000,
+    # Testing Mode
+    "bypass_market_hours": False,  # Set to True to test outside market hours
     # Stop Loss Parameters
     "initial_stoploss": 50,  # Fixed SL points below entry (0 = disabled)
     "max_loss_per_trade": 0,  # Max loss amount per trade (₹, 0 = disabled)

@@ -296,9 +296,32 @@ class TradingBot:
                         index_ltp = self.dhan.get_index_ltp(index_name)
                         if index_ltp > 0:
                             bot_state['index_ltp'] = index_ltp
+                
+                # If no data from API (market closed or no credentials), simulate index movement for testing
+                if bot_state['index_ltp'] == 0 and config.get('bypass_market_hours', False):
+                    # Initialize with realistic base value for index
+                    index_config = get_index_config(index_name)
+                    if bot_state.get('simulated_base_price') is None:
+                        if index_name == 'NIFTY':
+                            bot_state['simulated_base_price'] = 23500.0
+                        elif index_name == 'BANKNIFTY':
+                            bot_state['simulated_base_price'] = 51500.0
+                        elif index_name == 'FINNIFTY':
+                            bot_state['simulated_base_price'] = 22000.0
+                        elif index_name == 'MIDCPNIFTY':
+                            bot_state['simulated_base_price'] = 12500.0
+                        else:
+                            bot_state['simulated_base_price'] = 70000.0  # SENSEX
                     
-                    # Update candle data
-                    index_ltp = bot_state['index_ltp']
+                    # Generate realistic tick movements (simulate market volatility)
+                    base = bot_state['simulated_base_price']
+                    tick_change = random.choice([-15, -10, -5, -2, 0, 2, 5, 10, 15])
+                    bot_state['simulated_base_price'] += tick_change
+                    bot_state['index_ltp'] = round(bot_state['simulated_base_price'], 2)
+                    logger.debug(f"[TEST] Simulated {index_name} LTP: {bot_state['index_ltp']}")
+                
+                # Update candle data
+                index_ltp = bot_state['index_ltp']
                     if index_ltp > 0:
                         if index_ltp > high:
                             high = index_ltp
@@ -657,8 +680,8 @@ class TradingBot:
     
     async def enter_position(self, option_type: str, strike: int, index_ltp: float):
         """Enter a new position"""
-        # CHECK: Trading hours protection
-        if not self.is_within_trading_hours():
+        # CHECK: Trading hours protection (bypass if testing mode enabled)
+        if not config.get('bypass_market_hours', False) and not self.is_within_trading_hours():
             return
         
         index_name = config['selected_index']

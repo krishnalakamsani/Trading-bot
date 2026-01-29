@@ -9,6 +9,10 @@ def get_ist_time():
 
 def is_market_open():
     """Check if market is open (9:15 AM - 3:30 PM IST)"""
+    from config import config
+    if config.get('bypass_market_hours', False):
+        return True  # Always return True when testing mode is enabled
+    
     ist = get_ist_time()
     market_open = ist.replace(hour=9, minute=15, second=0, microsecond=0)
     market_close = ist.replace(hour=15, minute=30, second=0, microsecond=0)
@@ -16,12 +20,20 @@ def is_market_open():
 
 def can_take_new_trade():
     """Check if new trades are allowed (before 3:20 PM IST)"""
+    from config import config
+    if config.get('bypass_market_hours', False):
+        return True  # Always allow new trades in testing mode
+    
     ist = get_ist_time()
     cutoff_time = ist.replace(hour=15, minute=20, second=0, microsecond=0)
     return ist < cutoff_time
 
 def should_force_squareoff():
     """Check if it's time to force square off (3:25 PM IST)"""
+    from config import config
+    if config.get('bypass_market_hours', False):
+        return False  # Never force squareoff in testing mode
+    
     ist = get_ist_time()
     squareoff_time = ist.replace(hour=15, minute=25, second=0, microsecond=0)
     return ist >= squareoff_time

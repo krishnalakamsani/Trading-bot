@@ -10,8 +10,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Key, Settings, ShieldCheck, Eye, EyeOff, Save } from "lucide-react";
+import { Key, Settings, ShieldCheck, Eye, EyeOff, Save, TestTube } from "lucide-react";
 
 const SettingsPanel = ({ onClose }) => {
   const { config, updateConfig } = useContext(AppContext);
@@ -32,6 +33,9 @@ const SettingsPanel = ({ onClose }) => {
   const [targetPoints, setTargetPoints] = useState(config.target_points || 0);
   const [riskPerTrade, setRiskPerTrade] = useState(config.risk_per_trade || 0);
 
+  // Testing Parameters
+  const [bypassMarketHours, setBypassMarketHours] = useState(config.bypass_market_hours || false);
+
   const [saving, setSaving] = useState(false);
   const isFirstRender = React.useRef(true);
 
@@ -47,6 +51,7 @@ const SettingsPanel = ({ onClose }) => {
       setTrailStep(config?.trail_step || 5);
       setTargetPoints(config?.target_points || 0);
       setRiskPerTrade(config?.risk_per_trade || 0);
+      setBypassMarketHours(config?.bypass_market_hours || false);
       isFirstRender.current = false;
     }
   }, []); // Empty dependency array - only run once on mount
@@ -81,6 +86,14 @@ const SettingsPanel = ({ onClose }) => {
     setSaving(false);
   };
 
+  const handleSaveTestingParams = async () => {
+    setSaving(true);
+    await updateConfig({
+      bypass_market_hours: bypassMarketHours,
+    });
+    setSaving(false);
+  };
+
   // Get lot size for selected index
   const getSelectedIndexInfo = () => {
     const index = indices.find(i => i.name === selectedIndex);
@@ -103,7 +116,7 @@ const SettingsPanel = ({ onClose }) => {
         </DialogHeader>
 
         <Tabs defaultValue="strategy" className="w-full overflow-visible">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="credentials" className="text-xs">
               <Key className="w-3 h-3 mr-1" />
               API Keys
@@ -111,6 +124,10 @@ const SettingsPanel = ({ onClose }) => {
             <TabsTrigger value="risk" className="text-xs">
               <ShieldCheck className="w-3 h-3 mr-1" />
               Risk
+            </TabsTrigger>
+            <TabsTrigger value="testing" className="text-xs">
+              <TestTube className="w-3 h-3 mr-1" />
+              Testing
             </TabsTrigger>
           </TabsList>
 
@@ -338,6 +355,62 @@ const SettingsPanel = ({ onClose }) => {
               >
                 <Save className="w-3 h-3 mr-1" />
                 {saving ? "Saving..." : "Save Parameters"}
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Testing Parameters Tab */}
+          <TabsContent value="testing" className="space-y-4 mt-4 overflow-visible">
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-800">
+              <strong>Testing Mode:</strong> Use this to test the bot outside market hours. Enable bypass mode to test entries, exits, and signal logic.
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="space-y-1">
+                  <Label htmlFor="bypass-market-hours" className="text-sm font-semibold cursor-pointer">
+                    Bypass Market Hours Check
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    Allow bot to run and take trades outside 9:15 AM - 3:30 PM IST
+                  </p>
+                </div>
+                <Switch
+                  id="bypass-market-hours"
+                  checked={bypassMarketHours}
+                  onCheckedChange={setBypassMarketHours}
+                  data-testid="bypass-market-hours-switch"
+                />
+              </div>
+
+              {bypassMarketHours && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-sm text-xs text-amber-800">
+                  <strong>⚠ Warning:</strong> Market hours check is DISABLED. The bot will run anytime you start it. Make sure you're in Paper mode for testing!
+                </div>
+              )}
+
+              <div className="space-y-2 text-xs text-gray-600 p-3 bg-gray-50 rounded-sm">
+                <p><strong>How to Test:</strong></p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>Enable "Bypass Market Hours Check" above</li>
+                  <li>Click "Save Testing Params"</li>
+                  <li>Ensure you're in <strong>Paper Mode</strong></li>
+                  <li>Start the bot from the main dashboard</li>
+                  <li>Bot will generate signals and simulate trades in real-time</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSaveTestingParams}
+                disabled={saving}
+                size="sm"
+                className="rounded-sm btn-active"
+                data-testid="save-testing-params-btn"
+              >
+                <Save className="w-3 h-3 mr-1" />
+                {saving ? "Saving..." : "Save Testing Params"}
               </Button>
             </div>
           </TabsContent>
