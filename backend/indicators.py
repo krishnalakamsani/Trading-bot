@@ -415,21 +415,24 @@ class SuperTrendMACD:
     """Combined SuperTrend + MACD Strategy
     
     SuperTrend triggers the signal, MACD confirms the trend direction.
-    - When SuperTrend flips to GREEN: only trade if all 3 MACD values are positive
-    - When SuperTrend flips to RED: only trade if all 3 MACD values are negative
-    - Keep checking after each candle until conditions are met or signal flips
+    - When SuperTrend flips: check all 3 MACD values (line, signal_line, histogram)
+    - Within 5 second window after flip, if all align, generate signal
+    - If 5 seconds pass without alignment, no signal until next flip
     """
     def __init__(self, supertrend_period=7, supertrend_mult=4, macd_fast=12, macd_slow=26, macd_signal=9):
+        import time
         self.supertrend = SuperTrend(period=supertrend_period, multiplier=supertrend_mult)
         self.macd = MACD(fast=macd_fast, slow=macd_slow, signal=macd_signal)
         self.last_st_direction = None  # Track last direction to detect flips
+        self.flip_time = None  # Track when SuperTrend flipped
+        self.flip_window_seconds = 5  # Check MACD for 5 seconds after flip
     
     def reset(self):
         """Reset both indicators"""
         self.supertrend.reset()
         self.macd.reset()
         self.last_st_direction = None
-        self.candles_since_flip = 0
+        self.flip_time = None
     
     def add_candle(self, high, low, close):
         """Add candle and validate SuperTrend signal with MACD confirmation"""
@@ -471,6 +474,7 @@ class SuperTrendMACD:
         
         # Calculate histogram
         histogram = macd_line - macd_signal_line
+        
         # Check if SuperTrend direction changed
         current_direction = self.supertrend.direction
         direction_changed = False
@@ -482,25 +486,53 @@ class SuperTrendMACD:
             # Direction flip detected
             direction_changed = True
             self.last_st_direction = current_direction
+            import time
+            self.flip_time = time.time()  # Record flip time
         
-        # Determine final signal - only check MACD when SuperTrend flips
+        # Determine final signal
         final_signal = None
         
         if direction_changed:
-            # SuperTrend just flipped - check if MACD is green (positive) or red (negative)
+            # SuperTrend just flipped - check if all 3 MACD values align
             if current_direction == 1:
-                # Flipped to GREEN (bullish) - check if MACD is positive
-                if macd_line > 0:
+                # Flipped to GREEN (bullish) - check if all 3 MACD values are positive
+                if macd_line > 0 and macd_signal_line > 0 and histogram > 0:
                     final_signal = "GREEN"
-                    logger.info(f"[SIGNAL] SuperTrend flipped GREEN + MACD confirmed (macd={macd_line:.4f})")
+                    logger.info(f"[SIGNAL] SuperTrend flipped GREEN + MACD confirmed (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
                 else:
-                    logger.debug(f"[SIGNAL] SuperTrend flipped GREEN but MACD not positive (macd={macd_line:.4f})")
+                    logger.debug(f"[SIGNAL] SuperTrend flipped GREEN - waiting for MACD confirmation (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
             elif current_direction == -1:
-                # Flipped to RED (bearish) - check if MACD is negative
-                if macd_line < 0:
+                # Flipped to RED (bearish) - check if all 3 MACD values are negative
+                if macd_line < 0 and macd_signal_line < 0 and histogram < 0:
                     final_signal = "RED"
-                    logger.info(f"[SIGNAL] SuperTrend flipped RED + MACD confirmed (macd={macd_line:.4f})")
+                    logger.info(f"[SIGNAL] SuperTrend flipped RED + MACD confirmed (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
                 else:
-                    logger.debug(f"[SIGNAL] SuperTrend flipped RED but MACD not negative (macd={macd_line:.4f})")
+                    logger.debug(f"[SIGNAL] SuperTrend flipped RED - waiting for MACD confirmation (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
+        else:
+            # SuperTrend hasn't flipped - check MACD within 5-second window
+            if self.flip_time is not None:
+                import time
+                elapsed = time.time() - self.flip_time
+                
+                if elapsed <= self.flip_window_seconds:
+                    # Still within 5-second window, check MACD alignment
+                    if self.last_st_direction == 1:
+                        # Waiting for GREEN confirmation
+                        if macd_line > 0 and macd_signal_line > 0 and histogram > 0:
+                            final_signal = "GREEN"
+                            logger.info(f"[SIGNAL] GREEN confirmed in {elapsed:.2f}s (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
+                        else:
+                            logger.debug(f"[MACD WINDOW {elapsed:.2f}s] GREEN: not aligned (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
+                    elif self.last_st_direction == -1:
+                        # Waiting for RED confirmation
+                        if macd_line < 0 and macd_signal_line < 0 and histogram < 0:
+                            final_signal = "RED"
+                            logger.info(f"[SIGNAL] RED confirmed in {elapsed:.2f}s (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
+                        else:
+                            logger.debug(f"[MACD WINDOW {elapsed:.2f}s] RED: not aligned (line={macd_line:.4f}, signal={macd_signal_line:.4f}, hist={histogram:.4f})")
+                else:
+                    # 5-second window closed, reset flip time
+                    logger.debug(f"[SIGNAL] Closed 5-second confirmation window. No MACD confirmation received.")
+                    self.flip_time = None
         
         return st_value, final_signal, macd_line

@@ -572,18 +572,20 @@ class TradingBot:
         index_config = get_index_config(index_name)
         qty = config['order_qty'] * index_config['lot_size']
         
-        # Check for exit on signal reversal
+        # Check for exit on SuperTrend direction reversal (not just confirmed signal)
+        # Exit based on SuperTrend direction, regardless of MACD confirmation
         if self.current_position:
             position_type = self.current_position.get('option_type', '')
+            st_direction = self.indicator.supertrend.direction  # 1=GREEN (up), -1=RED (down)
             
-            if position_type == 'CE' and signal == 'RED':
+            if position_type == 'CE' and st_direction == -1:  # Holding CE but ST flipped RED
                 exit_price = bot_state['current_option_ltp']
                 pnl = (exit_price - self.entry_price) * qty
                 logger.info("[SIGNAL] SuperTrend flip RED - Exiting CE")
                 await self.close_position(exit_price, pnl, "SuperTrend Reversal")
                 return True
             
-            if position_type == 'PE' and signal == 'GREEN':
+            if position_type == 'PE' and st_direction == 1:  # Holding PE but ST flipped GREEN
                 exit_price = bot_state['current_option_ltp']
                 pnl = (exit_price - self.entry_price) * qty
                 logger.info("[SIGNAL] SuperTrend flip GREEN - Exiting PE")
