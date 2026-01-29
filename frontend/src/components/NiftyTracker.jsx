@@ -77,7 +77,12 @@ const NiftyTracker = () => {
           ) : (
             <TrendingDown className="w-3 h-3" />
           )}
-          SuperTrend: {marketData.supertrend_signal || "N/A"}
+          SuperTrend: {marketData.supertrend_value > 0
+            ? marketData.supertrend_value.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            : "N/A"}
         </div>
       </div>
 

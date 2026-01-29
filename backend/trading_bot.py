@@ -332,9 +332,11 @@ class TradingBot:
                             bot_state['supertrend_value'] = indicator_value if isinstance(indicator_value, (int, float)) else str(indicator_value)
                             bot_state['macd_value'] = macd_value if isinstance(macd_value, (int, float)) else 0.0
                             
-                            # Update signal status
-                            if signal:
-                                bot_state['signal_status'] = signal.lower()  # "buy" or "sell"
+                            # Update signal status (GREEN="buy", RED="sell", None="waiting")
+                            if signal == "GREEN":
+                                bot_state['signal_status'] = "buy"
+                            elif signal == "RED":
+                                bot_state['signal_status'] = "sell"
                             else:
                                 bot_state['signal_status'] = "waiting"
                             
