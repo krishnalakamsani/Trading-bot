@@ -322,24 +322,24 @@ class TradingBot:
                 
                 # Update candle data
                 index_ltp = bot_state['index_ltp']
-                    if index_ltp > 0:
-                        if index_ltp > high:
-                            high = index_ltp
-                        if index_ltp < low:
-                            low = index_ltp
-                        close = index_ltp
-                    
-                    # Check SL/Target on EVERY TICK (responsive protection)
-                    if self.current_position and bot_state['current_option_ltp'] > 0:
-                        option_ltp = bot_state['current_option_ltp']
-                        tick_exit = await self.check_tick_sl(option_ltp)
-                        if tick_exit:
-                            # Position exited on tick, reset candle for next entry
-                            candle_start_time = datetime.now()
-                            high, low, close = 0, float('inf'), 0
-                            candle_number = 0
-                            await asyncio.sleep(1)
-                            continue
+                if index_ltp > 0:
+                    if index_ltp > high:
+                        high = index_ltp
+                    if index_ltp < low:
+                        low = index_ltp
+                    close = index_ltp
+                
+                # Check SL/Target on EVERY TICK (responsive protection)
+                if self.current_position and bot_state['current_option_ltp'] > 0:
+                    option_ltp = bot_state['current_option_ltp']
+                    tick_exit = await self.check_tick_sl(option_ltp)
+                    if tick_exit:
+                        # Position exited on tick, reset candle for next entry
+                        candle_start_time = datetime.now()
+                        high, low, close = 0, float('inf'), 0
+                        candle_number = 0
+                        await asyncio.sleep(1)
+                        continue
                 
                 # Check if candle is complete
                 elapsed = (datetime.now() - candle_start_time).total_seconds()

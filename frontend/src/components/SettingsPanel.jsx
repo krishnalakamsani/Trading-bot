@@ -124,7 +124,7 @@ const SettingsPanel = ({ onClose }) => {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="strategy" className="w-full overflow-visible">
+        <Tabs defaultValue="credentials" className="w-full overflow-visible">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="credentials" className="text-xs">
               <Key className="w-3 h-3 mr-1" />
