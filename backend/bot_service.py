@@ -200,10 +200,12 @@ async def update_config_values(updates: dict) -> dict:
     if updates.get('trail_start_profit') is not None:
         config['trail_start_profit'] = float(updates['trail_start_profit'])
         updated_fields.append('trail_start_profit')
+        logger.info(f"[CONFIG] Trail start profit changed to: {config['trail_start_profit']} pts")
         
     if updates.get('trail_step') is not None:
         config['trail_step'] = float(updates['trail_step'])
         updated_fields.append('trail_step')
+        logger.info(f"[CONFIG] Trail step changed to: {config['trail_step']} pts")
     
     if updates.get('target_points') is not None:
         config['target_points'] = float(updates['target_points'])

@@ -690,8 +690,8 @@ class TradingBot:
             logger.warning(f"[ENTRY] ✗ BLOCKED - Market is CLOSED | Cannot enter {option_type} position")
             return
         
-        # CHECK: Trading hours protection (bypass if testing mode enabled)
-        if not config.get('bypass_market_hours', False) and not self.is_within_trading_hours():
+        # CHECK: Trading hours protection
+        if not self.is_within_trading_hours():
             logger.warning(f"[ENTRY] ✗ BLOCKED - Outside trading hours | Cannot enter {option_type} position")
             return
         
