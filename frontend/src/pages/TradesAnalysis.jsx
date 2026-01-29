@@ -44,12 +44,13 @@ const TradesAnalysis = () => {
       const response = await fetch(`${API_URL}/api/analytics`);
       if (!response.ok) throw new Error('Failed to fetch analytics');
       const data = await response.json();
+      console.log('Analytics data received:', data);
       setAnalytics(data);
       setTrades(data.trades || []);
       setError(null);
     } catch (err) {
-      setError(err.message);
       console.error('Error fetching analytics:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
