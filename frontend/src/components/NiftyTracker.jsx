@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState, useRef } from "react";
 import { AppContext } from "@/App";
-import { TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, Circle } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -77,12 +77,9 @@ const NiftyTracker = () => {
           ) : (
             <TrendingDown className="w-3 h-3" />
           )}
-          SuperTrend: {marketData.supertrend_value > 0
-            ? marketData.supertrend_value.toLocaleString("en-IN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })
-            : "N/A"}
+          <span>SuperTrend:</span>
+          <Circle className="w-2 h-2 mx-1" style={{ fill: isGreen ? "#059669" : "#DC2626", color: isGreen ? "#059669" : "#DC2626" }} />
+          <span>{isGreen ? "BULLISH" : "BEARISH"}</span>
         </div>
       </div>
 
@@ -120,15 +117,23 @@ const NiftyTracker = () => {
 
           <div>
             <p className="label-text">MACD Value</p>
-            <p
-              className="text-lg font-mono tracking-tight"
-              style={{ color: marketData.macd_value > 0 ? "#059669" : "#DC2626" }}
-              data-testid="macd-value"
-            >
-              {marketData.macd_value !== undefined && marketData.macd_value !== null
-                ? marketData.macd_value.toFixed(4)
-                : "—"}
-            </p>
+            <div className="flex items-center gap-2">
+              <p
+                className="text-lg font-mono tracking-tight"
+                style={{ color: marketData.macd_value > 0 ? "#059669" : "#DC2626" }}
+                data-testid="macd-value"
+              >
+                {marketData.macd_value !== undefined && marketData.macd_value !== null
+                  ? marketData.macd_value.toFixed(4)
+                  : "—"}
+              </p>
+              {marketData.macd_value !== undefined && marketData.macd_value !== null && (
+                <Circle 
+                  className="w-2 h-2" 
+                  style={{ fill: marketData.macd_value > 0 ? "#059669" : "#DC2626", color: marketData.macd_value > 0 ? "#059669" : "#DC2626" }} 
+                />
+              )}
+            </div>
           </div>
 
           <div className="ml-auto text-right">
