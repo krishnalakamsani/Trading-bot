@@ -230,6 +230,8 @@ function App() {
     try {
       await axios.post(`${API}/config/update`, newConfig);
       toast.success("Configuration updated");
+      // Wait 300ms for backend to save before fetching
+      await new Promise(resolve => setTimeout(resolve, 300));
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to update config");

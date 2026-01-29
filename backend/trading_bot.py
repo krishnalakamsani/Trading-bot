@@ -44,26 +44,30 @@ class TradingBot:
         return False
     
     def _initialize_indicator(self):
-        """Initialize SuperTrend + MACD indicator"""
+        """Initialize indicator based on config"""
         try:
-            self.indicator = SuperTrendMACD(
-                supertrend_period=config['supertrend_period'],
-                supertrend_mult=config['supertrend_multiplier'],
-                macd_fast=config['macd_fast'],
-                macd_slow=config['macd_slow'],
-                macd_signal=config['macd_signal']
-            )
-            logger.info(f"[SIGNAL] SuperTrend + MACD initialized")
+            indicator_type = config.get('indicator_type', 'supertrend')
+            
+            if indicator_type == 'supertrend_macd':
+                self.indicator = SuperTrendMACD(
+                    supertrend_period=config['supertrend_period'],
+                    supertrend_mult=config['supertrend_multiplier'],
+                    macd_fast=config['macd_fast'],
+                    macd_slow=config['macd_slow'],
+                    macd_signal=config['macd_signal']
+                )
+                logger.info(f"[SIGNAL] SuperTrend + MACD initialized")
+            else:  # supertrend
+                self.indicator = SuperTrend(
+                    period=config['supertrend_period'],
+                    multiplier=config['supertrend_multiplier']
+                )
+                logger.info(f"[SIGNAL] SuperTrend initialized")
         except Exception as e:
             logger.error(f"[ERROR] Failed to initialize indicator: {e}")
-            # Fallback
-            self.indicator = SuperTrendMACD(
-                supertrend_period=7,
-                supertrend_mult=4,
-                macd_fast=12,
-                macd_slow=26,
-                macd_signal=9
-            )
+            # Fallback to SuperTrend
+            self.indicator = SuperTrend(period=7, multiplier=4)
+            logger.info(f"[SIGNAL] SuperTrend (fallback) initialized")
     
     def reset_indicator(self):
         """Reset the selected indicator"""
