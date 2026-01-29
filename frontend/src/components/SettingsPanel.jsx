@@ -95,7 +95,16 @@ const SettingsPanel = ({ onClose }) => {
   };
 
   // Get lot size for selected index
+  const indices = [
+    { name: 'NIFTY', lot_size: 50 },
+    { name: 'BANKNIFTY', lot_size: 15 },
+    { name: 'FINNIFTY', lot_size: 40 },
+    { name: 'MIDCPNIFTY', lot_size: 75 },
+    { name: 'SENSEX', lot_size: 10 }
+  ];
+  
   const getSelectedIndexInfo = () => {
+    const selectedIndex = config?.selected_index || 'NIFTY';
     const index = indices.find(i => i.name === selectedIndex);
     return index || { lot_size: 50, strike_interval: 50 };
   };
