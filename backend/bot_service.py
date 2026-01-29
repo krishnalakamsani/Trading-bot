@@ -44,18 +44,36 @@ async def squareoff_position() -> dict:
 
 
 def get_bot_status() -> dict:
-    """Get current bot status"""
-    from utils import is_market_open
+    """Get current bot status with market hour validation"""
+    from utils import is_market_open, get_ist_time
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    ist = get_ist_time()
+    market_is_open = is_market_open()
+    
+    # Debug logging for market status
+    is_weekday = ist.weekday() < 5  # 0-4 = Mon-Fri, 5-6 = Sat-Sun
+    hour_in_range = 9 <= ist.hour <= 15 or (ist.hour == 15 and ist.minute <= 30)
+    
+    logger.debug(f"[STATUS] Market check: Weekday={is_weekday}, Time={ist.strftime('%H:%M')}, Open={market_is_open}")
     
     return {
         "is_running": bot_state['is_running'],
         "mode": bot_state['mode'],
-        "market_status": "open" if is_market_open() else "closed",
+        "market_status": "open" if market_is_open else "closed",
+        "market_details": {
+            "is_weekday": is_weekday,
+            "current_time_ist": ist.strftime('%H:%M:%S'),
+            "trading_hours": "09:15 - 15:30 IST"
+        },
         "connection_status": "connected" if config['dhan_access_token'] else "disconnected",
         "daily_max_loss_triggered": bot_state['daily_max_loss_triggered'],
         "selected_index": config['selected_index'],
         "candle_interval": config['candle_interval']
     }
+
 
 
 def get_market_data() -> dict:

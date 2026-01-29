@@ -78,14 +78,25 @@ const TopBar = ({ onSettingsClick }) => {
           {botStatus.mode === "live" ? "LIVE" : "PAPER"}
         </div>
 
-        {/* Market Status */}
+        {/* Market Status - PROMINENT */}
         <div
           className={`status-badge ${
-            botStatus.market_status === "open" ? "status-running" : "status-stopped"
+            botStatus.market_status === "open" ? "status-running" : "status-error"
           }`}
           data-testid="market-status-badge"
+          title={botStatus.market_details ? `${botStatus.market_details.current_time_ist} IST` : ""}
         >
-          Market: {botStatus.market_status === "open" ? "Open" : "Closed"}
+          <span className={`w-2 h-2 rounded-full ${
+            botStatus.market_status === "open" ? "bg-emerald-500 animate-pulse" : "bg-red-500"
+          }`} />
+          <span className="font-semibold">
+            {botStatus.market_status === "open" ? "🟢 OPEN" : "🔴 CLOSED"}
+          </span>
+          {botStatus.market_details && (
+            <span className="text-xs opacity-70 ml-1">
+              {botStatus.market_details.current_time_ist}
+            </span>
+          )}
         </div>
 
         {/* Connection Status */}
