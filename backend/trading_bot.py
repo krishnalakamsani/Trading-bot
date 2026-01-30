@@ -569,6 +569,16 @@ class TradingBot:
         profit_points = current_ltp - self.entry_price
         pnl = profit_points * qty
         
+        # Check DAILY max loss FIRST (highest priority)
+        daily_max_loss = config.get('daily_max_loss', 0)
+        if daily_max_loss > 0 and bot_state['daily_pnl'] + pnl < -daily_max_loss:
+            logger.warning(
+                f"[EXIT] ✗ Daily max loss BREACHED! | Current Daily P&L=₹{bot_state['daily_pnl']:.2f} | This trade P&L=₹{pnl:.2f} | Limit=₹{-daily_max_loss:.2f} | FORCE SQUAREOFF"
+            )
+            await self.close_position(current_ltp, pnl, "Daily Max Loss")
+            bot_state['daily_max_loss_triggered'] = True
+            return True
+        
         # Check max loss per trade (if enabled)
         max_loss_per_trade = config.get('max_loss_per_trade', 0)
         if max_loss_per_trade > 0 and pnl < -max_loss_per_trade:
@@ -606,21 +616,18 @@ class TradingBot:
         index_config = get_index_config(index_name)
         qty = config['order_qty'] * index_config['lot_size']
         
-        # Check for exit on SuperTrend direction reversal (not just confirmed signal)
-        # Exit based on SuperTrend direction, regardless of MACD confirmation
+        # Check for exit on SuperTrend direction reversal (PRIMARY exit trigger)
+        # Exit based on SuperTrend direction change - this is the critical signal
         if self.current_position:
             position_type = self.current_position.get('option_type', '')
-            # Safe access to supertrend direction with fallback
-            st_direction = 0
-            if hasattr(self.indicator, 'st_direction'):
-                st_direction = self.indicator.st_direction
-            elif hasattr(self.indicator, 'supertrend') and hasattr(self.indicator.supertrend, 'direction'):
-                st_direction = self.indicator.supertrend.direction
+            # Get current SuperTrend direction from indicator
+            st_direction = getattr(self.indicator, 'direction', 0)
             
+            # CRITICAL: EXIT ON SIGNAL REVERSAL
             if position_type == 'CE' and st_direction == -1:  # Holding CE but ST flipped RED
                 exit_price = bot_state['current_option_ltp']
                 pnl = (exit_price - self.entry_price) * qty
-                logger.info("[SIGNAL] SuperTrend flip RED - Exiting CE, will enter PE")
+                logger.warning(f"[SIGNAL] ✗ REVERSAL: SuperTrend flipped RED - Exiting CE position IMMEDIATELY | P&L=₹{pnl:.2f}")
                 await self.close_position(exit_price, pnl, "SuperTrend Reversal")
                 exited = True
                 # Continue to enter opposite position (PE)
@@ -628,7 +635,7 @@ class TradingBot:
             elif position_type == 'PE' and st_direction == 1:  # Holding PE but ST flipped GREEN
                 exit_price = bot_state['current_option_ltp']
                 pnl = (exit_price - self.entry_price) * qty
-                logger.info("[SIGNAL] SuperTrend flip GREEN - Exiting PE, will enter CE")
+                logger.warning(f"[SIGNAL] ✗ REVERSAL: SuperTrend flipped GREEN - Exiting PE position IMMEDIATELY | P&L=₹{pnl:.2f}")
                 await self.close_position(exit_price, pnl, "SuperTrend Reversal")
                 exited = True
                 # Continue to enter opposite position (CE)
