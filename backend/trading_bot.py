@@ -664,6 +664,12 @@ class TradingBot:
             logger.debug("[SIGNAL] No signal generated, skipping entry")
             return exited
         
+        # CRITICAL: Require signal FLIP before re-entering
+        # After any exit (reversal or forced square-off), wait for opposite signal
+        if self.last_signal and signal == self.last_signal:
+            logger.info(f"[ENTRY] ✗ Skipping - Waiting for signal flip | Current={signal}, Last={self.last_signal}")
+            return exited
+        
         option_type = 'PE' if signal == 'RED' else 'CE'
         atm_strike = round_to_strike(index_ltp, index_name)
         
