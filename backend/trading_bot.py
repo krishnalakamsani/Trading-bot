@@ -183,19 +183,6 @@ class TradingBot:
                     )
                     
                     logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: True")
-                    
-                    # Continue verification in background - don't block on this
-                    # CRITICAL: Verify exit order was actually filled
-                    fill_status = await self.dhan.verify_order_filled(order_id, security_id, qty, timeout_seconds=60)
-                    
-                    if fill_status.get('filled'):
-                        logger.info(f"[ORDER] ✓ EXIT order FILLED | Average Price: {fill_status.get('average_price')} | Trade: {trade_id}")
-                        # Use actual filled price
-                        actual_exit_price = fill_status.get('average_price', 0)
-                        if actual_exit_price > 0:
-                            exit_price = actual_exit_price
-                    else:
-                        logger.warning(f"[ORDER] ⚠ EXIT order NOT filled | OrderID: {order_id} | Status: {fill_status.get('status')}")
                 else:
                     logger.error(f"[ORDER] ✗ EXIT order FAILED | Trade: {trade_id} | Result: {result}")
                     return
@@ -848,38 +835,6 @@ class TradingBot:
             'index_name': index_name,
             'created_at': datetime.now(timezone.utc).isoformat()
         })
-        
-        # Continue verification in background if live mode
-        if bot_state['mode'] != 'paper':
-            # Start background verification - don't block on this
-            # CRITICAL: Verify order was actually filled (not just placed)
-            # For live orders, Dhan API might take time to update order list, so use longer timeout
-            fill_status = await self.dhan.verify_order_filled(order_id, security_id, qty, timeout_seconds=60)  # Increased from 30 to 60 seconds for slower Dhan API
-            
-            if not fill_status.get('filled'):
-                # Check if order is just pending (not rejected/cancelled)
-                # If it's NOT_FOUND or PENDING after timeout, assume it was silently filled by Dhan
-                order_status = fill_status.get('status', '')
-                if order_status in ['NOT_FOUND', 'OPEN', 'PENDING']:
-                    logger.warning(f"[ORDER] Order status unknown after timeout, assuming FILLED (status was {order_status})")
-                    # Continue with position save - assume order filled
-                else:
-                    logger.error(f"[ERROR] Entry order NOT filled | Status: {fill_status.get('status')} | Message: {fill_status.get('message')}")
-                    return
-            
-            # Order was filled! Use actual fill price
-            filled_price = fill_status.get('average_price', 0)
-            if filled_price <= 0:
-                # Fallback to quoted price if fill price not available
-                filled_price = await self.dhan.get_option_ltp(
-                    security_id=security_id,
-                    strike=strike,
-                    option_type=option_type,
-                    expiry=expiry,
-                    index_name=index_name
-                )
-            
-            entry_price = filled_price or entry_price or 0
 
 
 # Global bot instance
