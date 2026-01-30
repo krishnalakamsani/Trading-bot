@@ -376,9 +376,17 @@ class DhanAPI:
             import asyncio
             start_time = datetime.now(timezone.utc)
             retry_count = 0
+            last_log_time = start_time
             
             while True:
                 retry_count += 1
+                elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+                
+                # Log progress every 10 seconds
+                if (datetime.now(timezone.utc) - last_log_time).total_seconds() >= 10:
+                    logger.info(f"[ORDER] Waiting for {order_id} to appear in order list... ({elapsed:.0f}s elapsed, attempt #{retry_count})")
+                    last_log_time = datetime.now(timezone.utc)
+                
                 # Check order status
                 try:
                     orders = self.dhan.get_order_list()

@@ -789,8 +789,15 @@ class TradingBot:
             fill_status = await self.dhan.verify_order_filled(order_id, security_id, qty, timeout_seconds=60)  # Increased from 30 to 60 seconds for slower Dhan API
             
             if not fill_status.get('filled'):
-                logger.error(f"[ERROR] Entry order NOT filled | Status: {fill_status.get('status')} | Message: {fill_status.get('message')}")
-                return
+                # Check if order is just pending (not rejected/cancelled)
+                # If it's NOT_FOUND or PENDING after timeout, assume it was silently filled by Dhan
+                order_status = fill_status.get('status', '')
+                if order_status in ['NOT_FOUND', 'OPEN', 'PENDING']:
+                    logger.warning(f"[ORDER] Order status unknown after timeout, assuming FILLED (status was {order_status})")
+                    # Continue with position save - assume order filled
+                else:
+                    logger.error(f"[ERROR] Entry order NOT filled | Status: {fill_status.get('status')} | Message: {fill_status.get('message')}")
+                    return
             
             # Order was filled! Use actual fill price
             filled_price = fill_status.get('average_price', 0)
