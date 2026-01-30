@@ -173,6 +173,18 @@ class TradingBot:
                     exit_order_placed = True
                     logger.info(f"[ORDER] ✓ EXIT order PLACED | OrderID: {order_id} | Security: {security_id} | Qty: {qty}")
                     
+                    # Update database IMMEDIATELY after order placed (less than 1 second)
+                    await update_trade_exit(
+                        trade_id=trade_id,
+                        exit_time=datetime.now(timezone.utc).isoformat(),
+                        exit_price=exit_price,
+                        pnl=pnl,
+                        exit_reason=reason
+                    )
+                    
+                    logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: True")
+                    
+                    # Continue verification in background - don't block on this
                     # CRITICAL: Verify exit order was actually filled
                     fill_status = await self.dhan.verify_order_filled(order_id, security_id, qty, timeout_seconds=60)
                     
@@ -186,21 +198,31 @@ class TradingBot:
                         logger.warning(f"[ORDER] ⚠ EXIT order NOT filled | OrderID: {order_id} | Status: {fill_status.get('status')}")
                 else:
                     logger.error(f"[ORDER] ✗ EXIT order FAILED | Trade: {trade_id} | Result: {result}")
+                    return
             except Exception as e:
                 logger.error(f"[ORDER] ✗ Error placing EXIT order: {e} | Trade: {trade_id}", exc_info=True)
+                return
         elif not security_id:
             logger.warning(f"[WARNING] Cannot send exit order - security_id missing for {index_name} {option_type} | Trade: {trade_id}")
+            # Still update DB for paper/missing security
+            await update_trade_exit(
+                trade_id=trade_id,
+                exit_time=datetime.now(timezone.utc).isoformat(),
+                exit_price=exit_price,
+                pnl=pnl,
+                exit_reason=reason
+            )
         elif bot_state['mode'] == 'paper':
             logger.info(f"[ORDER] Paper mode - EXIT order not placed to Dhan (simulated) | Trade: {trade_id}")
-        
-        # Update database with exit details
-        await update_trade_exit(
-            trade_id=trade_id,
-            exit_time=datetime.now(timezone.utc).isoformat(),
-            exit_price=exit_price,
-            pnl=pnl,
-            exit_reason=reason
-        )
+            # Update DB immediately for paper mode
+            await update_trade_exit(
+                trade_id=trade_id,
+                exit_time=datetime.now(timezone.utc).isoformat(),
+                exit_price=exit_price,
+                pnl=pnl,
+                exit_reason=reason
+            )
+            logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: False")
         
         # Update state
         bot_state['daily_pnl'] += pnl
