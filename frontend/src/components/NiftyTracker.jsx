@@ -100,21 +100,6 @@ const NiftyTracker = () => {
             </div>
             <Circle className="w-4 h-4 flex-shrink-0" style={{ fill: isGreen ? "#059669" : "#DC2626", color: isGreen ? "#059669" : "#DC2626" }} />
           </div>
-
-          {/* MACD */}
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-sm border border-gray-200">
-            <div>
-              <p className="label-text text-xs mb-1">MACD</p>
-              <p className="text-xl font-mono font-bold" style={{ color: marketData.macd_value > 0 ? "#059669" : "#DC2626" }} data-testid="macd-value">
-                {marketData.macd_value !== undefined && marketData.macd_value !== null
-                  ? marketData.macd_value.toFixed(4)
-                  : "—"}
-              </p>
-            </div>
-            {marketData.macd_value !== undefined && marketData.macd_value !== null && (
-              <Circle className="w-4 h-4 flex-shrink-0" style={{ fill: marketData.macd_value > 0 ? "#059669" : "#DC2626", color: marketData.macd_value > 0 ? "#059669" : "#DC2626" }} />
-            )}
-          </div>
         </div>
 
         {/* Price Chart */}
