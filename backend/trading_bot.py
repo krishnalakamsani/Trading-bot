@@ -343,12 +343,13 @@ class TradingBot:
                     candle_number += 1
                     
                     if high > 0 and low < float('inf'):
-                        indicator_value, signal, macd_value = self.indicator.add_candle(high, low, close)
+                        indicator_value, signal = self.indicator.add_candle(high, low, close)
+                        macd_value = 0.0  # MACD not used in SuperTrend-only mode
                         
-                        # Always update SuperTrend value and MACD value
+                        # Always update SuperTrend value
                         if indicator_value:
                             bot_state['supertrend_value'] = indicator_value if isinstance(indicator_value, (int, float)) else str(indicator_value)
-                            bot_state['macd_value'] = macd_value if isinstance(macd_value, (int, float)) else 0.0
+                            bot_state['macd_value'] = 0.0  # MACD not used in SuperTrend-only mode
                             
                             # Update signal status (GREEN="buy", RED="sell", None="waiting")
                             if signal == "GREEN":
@@ -359,7 +360,6 @@ class TradingBot:
                                 bot_state['signal_status'] = "waiting"
                             
                             # Always log candle close with indicator values
-                            indicator_name = config.get('indicator_type', 'supertrend')
                             if signal:
                                 signal_status = f"Signal={signal}"
                             else:
@@ -367,7 +367,7 @@ class TradingBot:
                             logger.info(
                                 f"[CANDLE CLOSE #{candle_number}] {index_name} | "
                                 f"H={high:.2f} L={low:.2f} C={close:.2f} | "
-                                f"ST={indicator_value:.2f} | MACD={macd_value:.4f} | "
+                                f"ST={indicator_value:.2f} | "
                                 f"{signal_status}"
                             )
                             
