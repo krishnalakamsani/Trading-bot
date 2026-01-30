@@ -173,16 +173,16 @@ class TradingBot:
                     exit_order_placed = True
                     logger.info(f"[ORDER] ✓ EXIT order PLACED | OrderID: {order_id} | Security: {security_id} | Qty: {qty}")
                     
-                    # Update database IMMEDIATELY after order placed (less than 1 second)
-                    await update_trade_exit(
+                    logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: True")
+                    
+                    # Update database in background - don't wait
+                    asyncio.create_task(update_trade_exit(
                         trade_id=trade_id,
                         exit_time=datetime.now(timezone.utc).isoformat(),
                         exit_price=exit_price,
                         pnl=pnl,
                         exit_reason=reason
-                    )
-                    
-                    logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: True")
+                    ))
                 else:
                     logger.error(f"[ORDER] ✗ EXIT order FAILED | Trade: {trade_id} | Result: {result}")
                     return
@@ -191,25 +191,26 @@ class TradingBot:
                 return
         elif not security_id:
             logger.warning(f"[WARNING] Cannot send exit order - security_id missing for {index_name} {option_type} | Trade: {trade_id}")
-            # Still update DB for paper/missing security
-            await update_trade_exit(
+            logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: False")
+            # Update DB in background - don't wait
+            asyncio.create_task(update_trade_exit(
                 trade_id=trade_id,
                 exit_time=datetime.now(timezone.utc).isoformat(),
                 exit_price=exit_price,
                 pnl=pnl,
                 exit_reason=reason
-            )
+            ))
         elif bot_state['mode'] == 'paper':
             logger.info(f"[ORDER] Paper mode - EXIT order not placed to Dhan (simulated) | Trade: {trade_id}")
-            # Update DB immediately for paper mode
-            await update_trade_exit(
+            logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: False")
+            # Update DB in background - don't wait
+            asyncio.create_task(update_trade_exit(
                 trade_id=trade_id,
                 exit_time=datetime.now(timezone.utc).isoformat(),
                 exit_price=exit_price,
                 pnl=pnl,
                 exit_reason=reason
-            )
-            logger.info(f"[EXIT] ✓ Position closed | {index_name} {option_type} {strike} | Reason: {reason} | PnL: {pnl} | Order Placed: False")
+            ))
         
         # Update state
         bot_state['daily_pnl'] += pnl
@@ -822,8 +823,8 @@ class TradingBot:
         self.last_signal = option_type[0].upper() + 'E'  # 'CE' -> 'C', 'PE' -> 'P'
         self.last_signal = 'GREEN' if option_type == 'CE' else 'RED'
         
-        # Save to database IMMEDIATELY after order placed (less than 1 second)
-        await save_trade({
+        # Save to database in background - don't wait for DB commit
+        asyncio.create_task(save_trade({
             'trade_id': trade_id,
             'entry_time': datetime.now(timezone.utc).isoformat(),
             'option_type': option_type,
@@ -834,7 +835,7 @@ class TradingBot:
             'mode': bot_state['mode'],
             'index_name': index_name,
             'created_at': datetime.now(timezone.utc).isoformat()
-        })
+        }))
 
 
 # Global bot instance
