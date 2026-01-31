@@ -14,9 +14,10 @@ from typing import List
 
 # Local imports
 from config import ROOT_DIR, bot_state, config
-from models import ConfigUpdate
-from database import init_db, load_config, get_trades, get_trade_analytics
+from models import ConfigUpdate, BacktestRequest
+from database import init_db, load_config, get_trades, get_trade_analytics, get_candle_data_for_backtest
 import bot_service
+from backtest import run_backtest
 
 # Configure logging
 logging.basicConfig(
@@ -178,6 +179,44 @@ async def get_timeframes():
 async def get_strategy_status():
     """Get strategy/agent live status (debug)."""
     return bot_service.get_strategy_status()
+
+
+@api_router.post("/backtest/run")
+async def run_backtest_endpoint(req: BacktestRequest):
+    """Run a candle replay backtest (no live orders)."""
+    candles = await get_candle_data_for_backtest(
+        index_name=req.index_name,
+        limit=req.limit,
+        start_time=req.start_time,
+        end_time=req.end_time,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No candle data found for backtest. "
+                "Run the bot during market hours to collect candles, or increase limit / change date range."
+            ),
+        )
+
+    result = run_backtest(
+        candles,
+        strategy_mode=req.strategy_mode,
+        supertrend_period=int(config.get('supertrend_period', 7)),
+        supertrend_multiplier=float(config.get('supertrend_multiplier', 4)),
+        agent_adx_min=float(req.agent_adx_min if req.agent_adx_min is not None else config.get('agent_adx_min', 20.0)),
+        agent_wave_reset_macd_abs=float(
+            req.agent_wave_reset_macd_abs
+            if req.agent_wave_reset_macd_abs is not None
+            else config.get('agent_wave_reset_macd_abs', 0.05)
+        ),
+        close_open_position_at_end=bool(req.close_open_position_at_end),
+    )
+    # Attach minimal candle range metadata
+    result["meta"]["index_name"] = req.index_name
+    result["meta"]["start_time"] = candles[0].get("timestamp")
+    result["meta"]["end_time"] = candles[-1].get("timestamp")
+    return result
 
 
 @api_router.post("/config/update")

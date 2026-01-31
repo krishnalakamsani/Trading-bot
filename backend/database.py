@@ -2,6 +2,7 @@
 import aiosqlite
 from config import DB_PATH, config
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -377,4 +378,39 @@ async def get_candle_data(limit: int = 1000, index_name: str = None):
             return [dict(row) for row in reversed(rows)]  # Return in ascending order
     except Exception as e:
         logger.error(f"[DB] Error retrieving candle data: {e}")
+        return []
+
+
+async def get_candle_data_for_backtest(
+    *,
+    index_name: str,
+    limit: int = 2000,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+):
+    """Fetch candles for backtesting.
+
+    Uses `timestamp` (ISO string) ordering. If start/end are provided, filters by them.
+    Returns in ascending timestamp order.
+    """
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+
+            where = ["index_name = ?"]
+            params: list = [index_name]
+            if start_time:
+                where.append("timestamp >= ?")
+                params.append(start_time)
+            if end_time:
+                where.append("timestamp <= ?")
+                params.append(end_time)
+
+            where_sql = " AND ".join(where)
+            query = f"SELECT * FROM candle_data WHERE {where_sql} ORDER BY timestamp ASC LIMIT {int(limit)}"
+            async with db.execute(query, tuple(params)) as cursor:
+                rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"[DB] Error retrieving candle data for backtest: {e}")
         return []

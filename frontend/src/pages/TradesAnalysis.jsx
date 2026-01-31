@@ -30,6 +30,16 @@ const TradesAnalysis = () => {
     indexName: 'all'
   });
 
+  // Backtest / replay
+  const [backtestLoading, setBacktestLoading] = useState(false);
+  const [backtestError, setBacktestError] = useState(null);
+  const [backtestResult, setBacktestResult] = useState(null);
+  const [btIndexName, setBtIndexName] = useState('NIFTY');
+  const [btLimit, setBtLimit] = useState('2000');
+  const [btStrategyMode, setBtStrategyMode] = useState('agent');
+  const [btStartTime, setBtStartTime] = useState('');
+  const [btEndTime, setBtEndTime] = useState('');
+
   useEffect(() => {
     fetchAnalytics();
   }, []);
@@ -53,6 +63,48 @@ const TradesAnalysis = () => {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runBacktest = async () => {
+    try {
+      setBacktestLoading(true);
+      setBacktestError(null);
+      setBacktestResult(null);
+
+      const payload = {
+        index_name: btIndexName,
+        limit: parseInt(btLimit || '2000', 10),
+        start_time: btStartTime.trim() ? btStartTime.trim() : null,
+        end_time: btEndTime.trim() ? btEndTime.trim() : null,
+        strategy_mode: btStrategyMode,
+        close_open_position_at_end: true
+      };
+
+      const response = await fetch(`${API_URL}/api/backtest/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        let detail = 'Backtest failed';
+        try {
+          const errData = await response.json();
+          detail = errData?.detail || detail;
+        } catch (_) {
+          // ignore
+        }
+        throw new Error(detail);
+      }
+
+      const data = await response.json();
+      setBacktestResult(data);
+    } catch (err) {
+      console.error('Error running backtest:', err);
+      setBacktestError(err.message || 'Backtest failed');
+    } finally {
+      setBacktestLoading(false);
     }
   };
 
@@ -376,9 +428,10 @@ const TradesAnalysis = () => {
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-800 border border-slate-700">
+          <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-800 border border-slate-700">
             <TabsTrigger value="overview" className="text-white">Overview</TabsTrigger>
             <TabsTrigger value="trades" className="text-white">All Trades</TabsTrigger>
+            <TabsTrigger value="backtest" className="text-white">Backtest</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -768,6 +821,188 @@ const TradesAnalysis = () => {
                       )}
                     </TableBody>
                   </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Backtest Tab */}
+          <TabsContent value="backtest" className="space-y-4">
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <RefreshCw className={`w-5 h-5 ${backtestLoading ? 'animate-spin' : ''}`} />
+                  Candle Replay Backtest
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Index</label>
+                      <Select value={btIndexName} onValueChange={setBtIndexName}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          <SelectItem value="NIFTY" className="text-white">NIFTY</SelectItem>
+                          <SelectItem value="BANKNIFTY" className="text-white">BANKNIFTY</SelectItem>
+                          <SelectItem value="FINNIFTY" className="text-white">FINNIFTY</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Strategy Mode</label>
+                      <Select value={btStrategyMode} onValueChange={setBtStrategyMode}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-700 border-slate-600">
+                          <SelectItem value="agent" className="text-white">Agent (ST + ADX + MACD)</SelectItem>
+                          <SelectItem value="supertrend" className="text-white">SuperTrend Flip</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Candle Limit</label>
+                      <Input
+                        type="number"
+                        min={100}
+                        step={100}
+                        value={btLimit}
+                        onChange={(e) => setBtLimit(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Start Time (optional)</label>
+                      <Input
+                        placeholder="YYYY-MM-DDTHH:MM:SS"
+                        value={btStartTime}
+                        onChange={(e) => setBtStartTime(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">End Time (optional)</label>
+                      <Input
+                        placeholder="YYYY-MM-DDTHH:MM:SS"
+                        value={btEndTime}
+                        onChange={(e) => setBtEndTime(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={runBacktest}
+                      disabled={backtestLoading}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Run Backtest
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { setBacktestResult(null); setBacktestError(null); }}
+                      className="bg-slate-800 border-slate-600 text-white hover:bg-slate-700"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+
+                  {backtestError && (
+                    <div className="p-3 bg-red-900/30 border border-red-600 text-red-300 rounded">
+                      {backtestError}
+                    </div>
+                  )}
+
+                  {backtestResult && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <StatCard
+                          label="PnL (points)"
+                          value={`${backtestResult?.metrics?.total_pnl_points ?? 0}`}
+                          subtext={`Trades: ${backtestResult?.metrics?.total_trades ?? 0}`}
+                          icon={(backtestResult?.metrics?.total_pnl_points ?? 0) >= 0 ? TrendingUp : TrendingDown}
+                          isPositive={(backtestResult?.metrics?.total_pnl_points ?? 0) >= 0}
+                        />
+                        <StatCard
+                          label="Win Rate"
+                          value={`${backtestResult?.metrics?.win_rate ?? 0}%`}
+                          subtext={`Avg win: ${backtestResult?.metrics?.avg_win ?? 0}`}
+                          isPositive={(backtestResult?.metrics?.win_rate ?? 0) >= 50}
+                        />
+                        <StatCard
+                          label="Avg Loss"
+                          value={`${backtestResult?.metrics?.avg_loss ?? 0}`}
+                          subtext={`Max DD: ${backtestResult?.metrics?.max_drawdown ?? 0}`}
+                          isPositive={false}
+                        />
+                        <StatCard
+                          label="Range"
+                          value={`${backtestResult?.meta?.index_name || btIndexName}`}
+                          subtext={`${backtestResult?.meta?.start_time || ''} → ${backtestResult?.meta?.end_time || ''}`}
+                        />
+                      </div>
+
+                      <Card className="bg-slate-800 border-slate-700">
+                        <CardHeader>
+                          <CardTitle className="text-white text-sm">Simulated Trades</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="rounded-md border border-slate-700 overflow-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="border-slate-700">
+                                  <TableHead className="text-slate-300">Side</TableHead>
+                                  <TableHead className="text-slate-300">Entry Time</TableHead>
+                                  <TableHead className="text-slate-300">Exit Time</TableHead>
+                                  <TableHead className="text-slate-300 text-right">Entry</TableHead>
+                                  <TableHead className="text-slate-300 text-right">Exit</TableHead>
+                                  <TableHead className="text-slate-300 text-right">PnL</TableHead>
+                                  <TableHead className="text-slate-300">Reason</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {(backtestResult?.trades || []).length > 0 ? (
+                                  (backtestResult?.trades || []).map((t, idx) => (
+                                    <TableRow key={idx} className="border-slate-700 hover:bg-slate-700/50">
+                                      <TableCell>
+                                        <Badge variant={t.side === 'CE' ? 'default' : 'secondary'}>
+                                          {t.side}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-slate-300 text-xs">{t.entry_time}</TableCell>
+                                      <TableCell className="text-slate-300 text-xs">{t.exit_time}</TableCell>
+                                      <TableCell className="text-slate-300 text-right">{t.entry_price}</TableCell>
+                                      <TableCell className="text-slate-300 text-right">{t.exit_price}</TableCell>
+                                      <TableCell className="text-right">
+                                        <span className={`font-semibold ${t.pnl_points >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                          {t.pnl_points >= 0 ? '+' : ''}{t.pnl_points}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell className="text-slate-400 text-xs">{t.exit_reason}</TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={7} className="text-center text-slate-400 py-8">
+                                      No closed trades generated for this range
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

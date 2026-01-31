@@ -90,7 +90,9 @@ class TradingBot:
         self._try_load_agent_state()
         self._last_macd_value = None
         self._last_st_direction = None
-        logger.info(f"[SIGNAL] Indicator reset: {config.get('indicator_type', 'supertrend')}")
+        logger.info(
+            f"[SIGNAL] Indicator reset: {config.get('indicator_type', 'supertrend')} (Strategy: {config.get('strategy_mode', 'agent')})"
+        )
 
     def apply_strategy_config(self) -> None:
         """Apply config-driven strategy settings to the agent instance."""
@@ -172,7 +174,10 @@ class TradingBot:
         index_name = config['selected_index']
         interval = format_timeframe(config['candle_interval'])
         indicator_name = config.get('indicator_type', 'supertrend')
-        logger.info(f"[BOT] Started - Index: {index_name}, Timeframe: {interval}, Indicator: {indicator_name}, Mode: {bot_state['mode']}")
+        strategy_mode = config.get('strategy_mode', 'agent')
+        logger.info(
+            f"[BOT] Started - Index: {index_name}, Timeframe: {interval}, Strategy: {strategy_mode}, Indicator: {indicator_name}, Mode: {bot_state['mode']}"
+        )
         
         return {"status": "success", "message": f"Bot started for {index_name} ({interval})"}
     

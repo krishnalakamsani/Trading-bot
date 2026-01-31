@@ -251,14 +251,29 @@ async def update_config_values(updates: dict) -> dict:
 
     # Strategy / Agent
     if updates.get('strategy_mode') is not None:
-        mode = str(updates['strategy_mode']).strip().lower()
+        requested = updates['strategy_mode']
+        normalized = str(requested).strip().lower()
+        mode_map = {
+            # Agent
+            'agent': 'agent',
+            'st+adx+macd': 'agent',
+            'st_adx_macd': 'agent',
+            # SuperTrend flip
+            'supertrend': 'supertrend',
+            'supertrend_flip': 'supertrend',
+            'supertrend flip': 'supertrend',
+            'flip': 'supertrend',
+        }
+        mode = mode_map.get(normalized)
         if mode in ('agent', 'supertrend'):
             config['strategy_mode'] = mode
             bot_state['strategy_mode'] = mode
             updated_fields.append('strategy_mode')
-            logger.info(f"[CONFIG] Strategy mode changed to: {mode}")
+            logger.info(f"[CONFIG] Strategy mode changed to: {mode} (requested: {requested})")
         else:
-            logger.warning(f"[CONFIG] Invalid strategy_mode: {mode}. Allowed: agent|supertrend")
+            logger.warning(
+                f"[CONFIG] Invalid strategy_mode: {requested} (normalized: {normalized}). Allowed: agent|supertrend"
+            )
 
     if updates.get('agent_adx_min') is not None:
         val = float(updates['agent_adx_min'])

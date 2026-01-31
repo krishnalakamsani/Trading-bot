@@ -78,3 +78,19 @@ class IndexInfo(BaseModel):
 class TimeframeInfo(BaseModel):
     value: int
     label: str
+
+
+class BacktestRequest(BaseModel):
+    index_name: str = "NIFTY"
+    limit: int = 2000
+    start_time: Optional[str] = None  # ISO string
+    end_time: Optional[str] = None    # ISO string
+
+    # Strategy selection
+    strategy_mode: str = "agent"  # 'agent' | 'supertrend'
+
+    # Params (optional overrides; defaults from config if omitted in server)
+    agent_adx_min: Optional[float] = None
+    agent_wave_reset_macd_abs: Optional[float] = None
+
+    close_open_position_at_end: bool = True
