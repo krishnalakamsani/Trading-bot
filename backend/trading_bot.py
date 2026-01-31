@@ -90,7 +90,7 @@ class TradingBot:
         self._try_load_agent_state()
         self._last_macd_value = None
         self._last_st_direction = None
-            logger.info(f"[SIGNAL] Indicator reset: {config.get('indicator_type', 'supertrend')}")
+        logger.info(f"[SIGNAL] Indicator reset: {config.get('indicator_type', 'supertrend')}")
 
     def apply_strategy_config(self) -> None:
         """Apply config-driven strategy settings to the agent instance."""
