@@ -8,6 +8,7 @@ import NiftyTracker from "@/components/NiftyTracker";
 import TradesTable from "@/components/TradesTable";
 import DailySummary from "@/components/DailySummary";
 import LogsViewer from "@/components/LogsViewer";
+import StrategyStatus from "@/components/StrategyStatus";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -40,6 +41,7 @@ const Dashboard = () => {
           {/* Right Column - Summary, Logs, Settings (3 cols) */}
           <div className="col-span-12 lg:col-span-3 flex flex-col gap-4">
             <DailySummary />
+            <StrategyStatus />
             <LogsViewer />
           </div>
         </div>

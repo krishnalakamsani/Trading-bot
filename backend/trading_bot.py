@@ -601,6 +601,8 @@ class TradingBot:
                 "selected_index": config['selected_index'],
                 "candle_interval": config['candle_interval'],
                 "strategy_mode": bot_state.get('strategy_mode', config.get('strategy_mode', 'agent')),
+                "agent_wave_lock": getattr(getattr(self, 'strategy_agent', None), 'wave_lock', None),
+                "agent_last_trade_side": getattr(getattr(self, 'strategy_agent', None), 'last_trade_side', None),
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         })

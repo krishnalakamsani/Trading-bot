@@ -120,6 +120,40 @@ def get_daily_summary() -> dict:
     }
 
 
+def get_strategy_status() -> dict:
+    """Get live strategy/agent state for debugging (read-only)."""
+    bot = get_trading_bot()
+    agent = getattr(bot, 'strategy_agent', None)
+
+    wave_lock = None
+    last_trade_side = None
+    if agent is not None:
+        wave_lock = getattr(agent, 'wave_lock', None)
+        last_trade_side = getattr(agent, 'last_trade_side', None)
+
+    return {
+        "strategy_mode": config.get('strategy_mode', 'agent'),
+        "agent_params": {
+            "adx_min": config.get('agent_adx_min', 20.0),
+            "wave_reset_macd_abs": config.get('agent_wave_reset_macd_abs', 0.05),
+            "persist_agent_state": config.get('persist_agent_state', True),
+        },
+        "agent_state": {
+            "wave_lock": wave_lock,
+            "last_trade_side": last_trade_side,
+        },
+        "indicators": {
+            "supertrend_value": bot_state.get('supertrend_value', 0.0),
+            "macd_value": bot_state.get('macd_value', 0.0),
+            "adx_value": bot_state.get('adx_value', 0.0),
+        },
+        "position": {
+            "in_position": bool(bot_state.get('current_position')),
+            "current_position_side": bot_state.get('current_position', {}).get('option_type') if bot_state.get('current_position') else None,
+        },
+    }
+
+
 def get_config() -> dict:
     """Get current configuration"""
     index_config = get_index_config(config['selected_index'])

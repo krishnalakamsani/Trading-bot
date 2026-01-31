@@ -54,6 +54,7 @@ function App() {
     daily_stop_triggered: false
   });
   const [logs, setLogs] = useState([]);
+  const [strategyStatus, setStrategyStatus] = useState(null);
   const [config, setConfig] = useState({
     order_qty: 1,
     max_trades_per_day: 5,
@@ -89,14 +90,14 @@ function App() {
     configRef.current = config;
   }, [config]);
 
-  // Fetch initial data
+  // Fetch initial data (fast poll for core dashboard)
   const fetchData = useCallback(async () => {
     try {
       const [statusRes, marketRes, positionRes, tradesRes, summaryRes, logsRes, configRes, indicesRes, timeframesRes] = await Promise.all([
         axios.get(`${API}/status`),
         axios.get(`${API}/market/nifty`),
         axios.get(`${API}/position`),
-        axios.get(`${API}/trades`),  // Fetch all trades without limit
+        axios.get(`${API}/trades`), // Fetch all trades without limit
         axios.get(`${API}/summary`),
         axios.get(`${API}/logs?limit=100`),
         axios.get(`${API}/config`),
@@ -119,7 +120,17 @@ function App() {
     }
   }, []);
 
-  // WebSocket connection - using useEffect to handle reconnection
+  // Strategy status is debug/fallback data: fetch on initial load and when WS disconnects
+  const fetchStrategyStatus = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/strategy/status`);
+      setStrategyStatus(res.data);
+    } catch (e) {
+      // Endpoint is optional; keep existing data
+    }
+  }, []);
+
+  // WebSocket connection + polling fallback
   useEffect(() => {
     const connectWebSocket = () => {
       if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -137,6 +148,7 @@ function App() {
           if (data.type === "state_update") {
             const update = data.data;
             const currentConfig = configRef.current;
+
             setMarketData({
               ltp: update.index_ltp,
               supertrend_signal: update.supertrend_signal,
@@ -146,18 +158,46 @@ function App() {
               strategy_mode: update.strategy_mode ?? currentConfig.strategy_mode ?? "agent",
               selected_index: update.selected_index
             });
-            setBotStatus(prev => ({
+
+            // Keep the Strategy Status card consistent with WS indicator + agent updates
+            if (
+              update.strategy_mode ||
+              update.macd_value !== undefined ||
+              update.adx_value !== undefined ||
+              update.supertrend_value !== undefined ||
+              update.agent_wave_lock !== undefined ||
+              update.agent_last_trade_side !== undefined
+            ) {
+              setStrategyStatus((prev) => ({
+                ...(prev || {}),
+                strategy_mode: update.strategy_mode ?? prev?.strategy_mode,
+                agent_state: {
+                  ...(prev?.agent_state || {}),
+                  wave_lock: update.agent_wave_lock ?? prev?.agent_state?.wave_lock,
+                  last_trade_side: update.agent_last_trade_side ?? prev?.agent_state?.last_trade_side,
+                },
+                indicators: {
+                  ...(prev?.indicators || {}),
+                  macd_value: update.macd_value ?? prev?.indicators?.macd_value,
+                  adx_value: update.adx_value ?? prev?.indicators?.adx_value,
+                  supertrend_value: update.supertrend_value ?? prev?.indicators?.supertrend_value,
+                },
+              }));
+            }
+
+            setBotStatus((prev) => ({
               ...prev,
               is_running: update.is_running,
               mode: update.mode,
               selected_index: update.selected_index,
-              candle_interval: update.candle_interval
+              candle_interval: update.candle_interval,
             }));
-            setSummary(prev => ({
+            setSummary((prev) => ({
               ...prev,
               total_trades: update.daily_trades,
-              total_pnl: update.daily_pnl
+              total_pnl: update.daily_pnl,
             }));
+
             if (update.position) {
               setPosition({
                 has_position: true,
@@ -165,7 +205,8 @@ function App() {
                 entry_price: update.entry_price,
                 current_ltp: update.current_option_ltp,
                 trailing_sl: update.trailing_sl,
-                unrealized_pnl: (update.current_option_ltp - update.entry_price) * currentConfig.order_qty * currentConfig.lot_size
+                unrealized_pnl:
+                  (update.current_option_ltp - update.entry_price) * currentConfig.order_qty * currentConfig.lot_size,
               });
             } else {
               setPosition({ has_position: false });
@@ -179,6 +220,7 @@ function App() {
       ws.onclose = () => {
         setWsConnected(false);
         console.log("WebSocket disconnected");
+        fetchStrategyStatus();
         // Reconnect after 3 seconds
         reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
       };
@@ -191,6 +233,7 @@ function App() {
     };
 
     fetchData();
+    fetchStrategyStatus();
     connectWebSocket();
 
     // Polling fallback for non-WebSocket updates
@@ -205,7 +248,7 @@ function App() {
         wsRef.current.close();
       }
     };
-  }, [fetchData]);
+  }, [fetchData, fetchStrategyStatus]);
 
   // Bot control functions
   const startBot = async () => {
@@ -297,6 +340,7 @@ function App() {
     trades,
     summary,
     logs,
+    strategyStatus,
     config,
     indices,
     timeframes,

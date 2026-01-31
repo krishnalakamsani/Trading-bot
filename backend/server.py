@@ -174,6 +174,12 @@ async def get_timeframes():
     return bot_service.get_available_timeframes()
 
 
+@api_router.get("/strategy/status")
+async def get_strategy_status():
+    """Get strategy/agent live status (debug)."""
+    return bot_service.get_strategy_status()
+
+
 @api_router.post("/config/update")
 async def update_config(update: ConfigUpdate):
     """Update configuration"""
