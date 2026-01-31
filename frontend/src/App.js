@@ -43,7 +43,6 @@ function App() {
     macd_value: 0,
     adx_value: 0,
     strategy_mode: "agent",
-    signal_source: "index",
     selected_index: "NIFTY"
   });
   const [position, setPosition] = useState(null);
@@ -75,7 +74,6 @@ function App() {
 
     // Strategy / Agent
     strategy_mode: "agent",
-    signal_source: "index",
     agent_adx_min: 20.0,
     agent_wave_reset_macd_abs: 0.05,
     persist_agent_state: true
@@ -162,7 +160,6 @@ function App() {
               macd_value: update.macd_value ?? 0,
               adx_value: update.adx_value ?? 0,
               strategy_mode: update.strategy_mode ?? currentConfig.strategy_mode ?? "agent",
-              signal_source: update.signal_source ?? currentConfig.signal_source ?? "index",
               selected_index: update.selected_index
             });
 

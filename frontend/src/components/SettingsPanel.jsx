@@ -35,7 +35,6 @@ const SettingsPanel = ({ onClose }) => {
 
   // Strategy / Agent
   const [strategyMode, setStrategyMode] = useState(config.strategy_mode || "agent");
-  const [signalSource, setSignalSource] = useState(config.signal_source || "index");
   const [agentAdxMin, setAgentAdxMin] = useState(config.agent_adx_min ?? 20.0);
   const [agentWaveResetMacdAbs, setAgentWaveResetMacdAbs] = useState(
     config.agent_wave_reset_macd_abs ?? 0.05
@@ -46,8 +45,6 @@ const SettingsPanel = ({ onClose }) => {
   const [bypassMarketHours, setBypassMarketHours] = useState(
     config.bypass_market_hours ?? false
   );
-
-  const canChangeSignalSource = !botStatus?.is_running && !position?.has_position;
 
   const [saving, setSaving] = useState(false);
   const isFirstRender = React.useRef(true);
@@ -66,7 +63,6 @@ const SettingsPanel = ({ onClose }) => {
       setRiskPerTrade(config?.risk_per_trade || 0);
 
       setStrategyMode(config?.strategy_mode || "agent");
-      setSignalSource(config?.signal_source || "index");
       setAgentAdxMin(config?.agent_adx_min ?? 20.0);
       setAgentWaveResetMacdAbs(config?.agent_wave_reset_macd_abs ?? 0.05);
       setPersistAgentState(config?.persist_agent_state ?? true);
@@ -109,7 +105,6 @@ const SettingsPanel = ({ onClose }) => {
     setSaving(true);
     await updateConfig({
       strategy_mode: strategyMode,
-      signal_source: signalSource,
       agent_adx_min: agentAdxMin,
       agent_wave_reset_macd_abs: agentWaveResetMacdAbs,
       persist_agent_state: persistAgentState,
@@ -400,38 +395,6 @@ const SettingsPanel = ({ onClose }) => {
               </div>
 
               <div className="space-y-2">
-                <Label>Signal Source</Label>
-                <div className="flex gap-2 flex-wrap">
-                  <Button
-                    type="button"
-                    variant={signalSource === "index" ? "default" : "outline"}
-                    size="sm"
-                    className="rounded-sm"
-                    onClick={() => setSignalSource("index")}
-                    disabled={!canChangeSignalSource}
-                  >
-                    Index (spot)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={signalSource === "option_fixed" ? "default" : "outline"}
-                    size="sm"
-                    className="rounded-sm"
-                    onClick={() => setSignalSource("option_fixed")}
-                    disabled={!canChangeSignalSource}
-                  >
-                    Option (fixed)
-                  </Button>
-                </div>
-                {!canChangeSignalSource && (
-                  <p className="text-xs text-amber-600">Stop bot and close position to change signal source.</p>
-                )}
-                <p className="text-xs text-gray-500">
-                  <span className="font-medium">Index</span> uses index OHLC for indicators. <span className="font-medium">Option</span> builds OHLC from a fixed ATM CE+PE contract and trades that contract.
-                </p>
-              </div>
-
-              <div className="space-y-2">
                 <Label>Mode</Label>
                 <div className="flex gap-2">
                   <Button
@@ -500,7 +463,6 @@ const SettingsPanel = ({ onClose }) => {
                 <Switch
                   checked={bypassMarketHours}
                   onCheckedChange={setBypassMarketHours}
-                  disabled={!canChangeSignalSource}
                 />
               </div>
 

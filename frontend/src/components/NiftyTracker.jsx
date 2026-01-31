@@ -65,7 +65,7 @@ const NiftyTracker = () => {
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-blue-600" />
           <h2 className="text-sm font-semibold text-gray-900 font-[Manrope]">
-            {selectedIndex} Index
+            {selectedIndex} (Reference)
           </h2>
         </div>
       </div>
@@ -186,7 +186,7 @@ const NiftyTracker = () => {
         {/* Info Bar */}
         <div className="mt-3 flex items-center justify-between text-xs text-gray-500 font-mono">
           <span>Timeframe: {formatTimeframe(candleInterval)}</span>
-          <span>Strategy: {strategyMode}</span>
+          <span>Strategy: {strategyMode} (fixed ATM option candles)</span>
           <span>{priceHistory.length} candles</span>
         </div>
       </div>
