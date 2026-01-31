@@ -36,6 +36,13 @@ bot_state = {
     "fixed_pe_security_id": None,
     "signal_ce_ltp": 0.0,
     "signal_pe_ltp": 0.0,
+    # Per-option indicators for the fixed ATM contracts (for UI/validation)
+    "signal_ce_supertrend_signal": None,
+    "signal_pe_supertrend_signal": None,
+    "signal_ce_supertrend_value": 0.0,
+    "signal_pe_supertrend_value": 0.0,
+    "signal_ce_macd_hist": 0.0,
+    "signal_pe_macd_hist": 0.0,
 }
 
 # Configuration (can be updated from frontend)

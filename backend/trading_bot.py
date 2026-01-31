@@ -554,6 +554,11 @@ class TradingBot:
                             if isinstance(ce_hist, (int, float)):
                                 self._opt_ce_hist_window.append(float(ce_hist))
 
+                            # Publish per-option indicator values for UI/debug
+                            bot_state['signal_ce_supertrend_value'] = float(ce_st_value) if isinstance(ce_st_value, (int, float)) else bot_state.get('signal_ce_supertrend_value', 0.0)
+                            bot_state['signal_ce_supertrend_signal'] = 'GREEN' if ce_st_dir == 1 else ('RED' if ce_st_dir == -1 else bot_state.get('signal_ce_supertrend_signal'))
+                            bot_state['signal_ce_macd_hist'] = float(ce_hist) if isinstance(ce_hist, (int, float)) else bot_state.get('signal_ce_macd_hist', 0.0)
+
                         # Compute PE indicators (if candle ready)
                         pe_st_value = None
                         pe_st_dir = None
@@ -568,6 +573,10 @@ class TradingBot:
 
                             if isinstance(pe_hist, (int, float)):
                                 self._opt_pe_hist_window.append(float(pe_hist))
+
+                            bot_state['signal_pe_supertrend_value'] = float(pe_st_value) if isinstance(pe_st_value, (int, float)) else bot_state.get('signal_pe_supertrend_value', 0.0)
+                            bot_state['signal_pe_supertrend_signal'] = 'GREEN' if pe_st_dir == 1 else ('RED' if pe_st_dir == -1 else bot_state.get('signal_pe_supertrend_signal'))
+                            bot_state['signal_pe_macd_hist'] = float(pe_hist) if isinstance(pe_hist, (int, float)) else bot_state.get('signal_pe_macd_hist', 0.0)
 
                         # Update global "latest" indicator values for UI/debug (prefer active position side)
                         active_side = (self.current_position or {}).get('option_type')
@@ -770,6 +779,12 @@ class TradingBot:
                 "fixed_pe_security_id": bot_state.get('fixed_pe_security_id'),
                 "signal_ce_ltp": bot_state.get('signal_ce_ltp', 0.0),
                 "signal_pe_ltp": bot_state.get('signal_pe_ltp', 0.0),
+                "signal_ce_supertrend_signal": bot_state.get('signal_ce_supertrend_signal'),
+                "signal_pe_supertrend_signal": bot_state.get('signal_pe_supertrend_signal'),
+                "signal_ce_supertrend_value": bot_state.get('signal_ce_supertrend_value', 0.0),
+                "signal_pe_supertrend_value": bot_state.get('signal_pe_supertrend_value', 0.0),
+                "signal_ce_macd_hist": bot_state.get('signal_ce_macd_hist', 0.0),
+                "signal_pe_macd_hist": bot_state.get('signal_pe_macd_hist', 0.0),
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         })

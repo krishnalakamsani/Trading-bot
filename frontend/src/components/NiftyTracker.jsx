@@ -60,6 +60,16 @@ const NiftyTracker = () => {
   const strategyMode = marketData.strategy_mode || config.strategy_mode || "agent";
   const strategyLabel = strategyMode === "st_macd_hist" ? "ST + MACD Histogram" : strategyMode;
 
+  const ceLtp = typeof marketData.signal_ce_ltp === "number" ? marketData.signal_ce_ltp : 0;
+  const peLtp = typeof marketData.signal_pe_ltp === "number" ? marketData.signal_pe_ltp : 0;
+  const strike = marketData.fixed_option_strike;
+  const expiry = marketData.fixed_option_expiry;
+
+  const ceStSig = marketData.signal_ce_supertrend_signal;
+  const peStSig = marketData.signal_pe_supertrend_signal;
+  const ceHist = typeof marketData.signal_ce_macd_hist === "number" ? marketData.signal_ce_macd_hist : 0;
+  const peHist = typeof marketData.signal_pe_macd_hist === "number" ? marketData.signal_pe_macd_hist : 0;
+
   return (
     <div className="terminal-card" data-testid="nifty-tracker">
       <div className="terminal-card-header">
@@ -126,6 +136,37 @@ const NiftyTracker = () => {
                   : "—"}
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Option Signal Prices */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="p-3 bg-gray-50 rounded-sm border border-gray-200">
+            <p className="label-text text-xs mb-1">Signal CE LTP</p>
+            <p className="text-lg font-mono font-bold text-gray-900">
+              {ceLtp > 0 ? `₹${ceLtp.toFixed(2)}` : "—"}
+            </p>
+            <p className="text-xs font-mono text-gray-600 mt-1">
+              ST: {ceStSig || "—"} | Hist: {ceHist !== 0 ? ceHist.toFixed(4) : "—"}
+            </p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-sm border border-gray-200">
+            <p className="label-text text-xs mb-1">Signal PE LTP</p>
+            <p className="text-lg font-mono font-bold text-gray-900">
+              {peLtp > 0 ? `₹${peLtp.toFixed(2)}` : "—"}
+            </p>
+            <p className="text-xs font-mono text-gray-600 mt-1">
+              ST: {peStSig || "—"} | Hist: {peHist !== 0 ? peHist.toFixed(4) : "—"}
+            </p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-sm border border-gray-200">
+            <p className="label-text text-xs mb-1">Fixed Contract</p>
+            <p className="text-sm font-mono font-semibold text-gray-900">
+              {strike ? `${selectedIndex} ${strike}` : "—"}
+            </p>
+            <p className="text-xs font-mono text-gray-600">
+              {expiry ? `Exp: ${expiry}` : ""}
+            </p>
           </div>
         </div>
 

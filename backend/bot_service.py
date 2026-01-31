@@ -80,6 +80,20 @@ def get_market_data() -> dict:
         "supertrend_value": bot_state['supertrend_value'],
         "macd_value": bot_state['macd_value'],
         "macd_hist": bot_state.get('macd_hist', 0.0),
+        # Fixed-contract option signal prices (CE/PE)
+        "signal_ce_ltp": bot_state.get('signal_ce_ltp', 0.0),
+        "signal_pe_ltp": bot_state.get('signal_pe_ltp', 0.0),
+        "signal_ce_supertrend_signal": bot_state.get('signal_ce_supertrend_signal'),
+        "signal_pe_supertrend_signal": bot_state.get('signal_pe_supertrend_signal'),
+        "signal_ce_supertrend_value": bot_state.get('signal_ce_supertrend_value', 0.0),
+        "signal_pe_supertrend_value": bot_state.get('signal_pe_supertrend_value', 0.0),
+        "signal_ce_macd_hist": bot_state.get('signal_ce_macd_hist', 0.0),
+        "signal_pe_macd_hist": bot_state.get('signal_pe_macd_hist', 0.0),
+        # Fixed-contract metadata
+        "fixed_option_strike": bot_state.get('fixed_option_strike'),
+        "fixed_option_expiry": bot_state.get('fixed_option_expiry'),
+        "fixed_ce_security_id": bot_state.get('fixed_ce_security_id'),
+        "fixed_pe_security_id": bot_state.get('fixed_pe_security_id'),
         # Kept for backward compatibility with older UI builds.
         "adx_value": 0.0,
         "signal_status": bot_state['signal_status'],
