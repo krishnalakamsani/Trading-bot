@@ -169,6 +169,12 @@ async def get_candles(limit: int = Query(default=1000, le=10000), index_name: st
     return await get_candle_data(limit=limit, index_name=index_name)
 
 
+@api_router.get("/candles/stats")
+async def get_candles_stats():
+    """Get candle DB stats for debugging backtest/replay."""
+    return await get_candle_data_stats()
+
+
 @api_router.get("/timeframes")
 async def get_timeframes():
     """Get available timeframes"""
