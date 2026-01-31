@@ -34,7 +34,7 @@ const SettingsPanel = ({ onClose }) => {
   const [riskPerTrade, setRiskPerTrade] = useState(config.risk_per_trade || 0);
 
   // Strategy / Agent
-  const [strategyMode, setStrategyMode] = useState(config.strategy_mode || "agent");
+  const [strategyMode, setStrategyMode] = useState("agent");
   const [agentAdxMin, setAgentAdxMin] = useState(config.agent_adx_min ?? 20.0);
   const [agentWaveResetMacdAbs, setAgentWaveResetMacdAbs] = useState(
     config.agent_wave_reset_macd_abs ?? 0.05
@@ -62,7 +62,7 @@ const SettingsPanel = ({ onClose }) => {
       setTargetPoints(config?.target_points || 0);
       setRiskPerTrade(config?.risk_per_trade || 0);
 
-      setStrategyMode(config?.strategy_mode || "agent");
+      setStrategyMode("agent");
       setAgentAdxMin(config?.agent_adx_min ?? 20.0);
       setAgentWaveResetMacdAbs(config?.agent_wave_reset_macd_abs ?? 0.05);
       setPersistAgentState(config?.persist_agent_state ?? true);
@@ -391,31 +391,11 @@ const SettingsPanel = ({ onClose }) => {
           <TabsContent value="strategy" className="space-y-4 mt-4 overflow-visible">
             <div className="space-y-4">
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-800">
-                <strong>Strategy Mode</strong>: Choose how entries/exits are generated.
+                <strong>Strategy</strong>: Fixed to Agent (ST + ADX + MACD) on ATM option candles.
               </div>
 
-              <div className="space-y-2">
-                <Label>Mode</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={strategyMode === "agent" ? "default" : "outline"}
-                    size="sm"
-                    className="rounded-sm"
-                    onClick={() => setStrategyMode("agent")}
-                  >
-                    Agent (ST + ADX + MACD)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={strategyMode === "supertrend" ? "default" : "outline"}
-                    size="sm"
-                    className="rounded-sm"
-                    onClick={() => setStrategyMode("supertrend")}
-                  >
-                    SuperTrend Flip
-                  </Button>
-                </div>
+              <div className="text-xs text-gray-600">
+                Mode: <span className="font-mono">Agent (ST + ADX + MACD)</span>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
