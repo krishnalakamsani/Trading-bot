@@ -10,6 +10,7 @@ const TradesTable = () => {
     if (!isoString) return "—";
     const date = new Date(isoString);
     return date.toLocaleTimeString("en-IN", {
+      timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -20,6 +21,7 @@ const TradesTable = () => {
     if (!isoString) return "";
     const date = new Date(isoString);
     return date.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
       day: "2-digit",
       month: "short",
     });

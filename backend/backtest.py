@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from indicators import ADX, MACD, SuperTrend
 from strategy_agent import AgentAction, AgentInputs, STAdxMacdAgent
+from time_utils import iso_to_ist_iso
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,10 @@ def run_backtest(
     supertrend_multiplier: float = 4.0,
     agent_adx_min: float = 20.0,
     agent_wave_reset_macd_abs: float = 0.05,
+    initial_stoploss: float = 0.0,
+    target_points: float = 0.0,
+    trail_start_profit: float = 0.0,
+    trail_step: float = 0.0,
     close_open_position_at_end: bool = True,
 ) -> Dict[str, Any]:
     """Replay historical candles and simulate entries/exits.
@@ -69,13 +74,15 @@ def run_backtest(
     position_side: Optional[str] = None
     entry_time: Optional[str] = None
     entry_price: Optional[float] = None
+    best_favorable_points: float = 0.0
 
     trades: List[BacktestTrade] = []
     equity_curve: List[float] = [0.0]
     equity = 0.0
 
     for row in candles:
-        ts = str(row.get("timestamp") or row.get("created_at") or "")
+        ts_raw = str(row.get("timestamp") or row.get("created_at") or "")
+        ts = iso_to_ist_iso(ts_raw) or ts_raw
         high = float(row["high"])
         low = float(row["low"])
         close = float(row["close"])
@@ -92,6 +99,84 @@ def run_backtest(
 
         st_dir = st.direction
         supertrend_flipped = bool(last_st_dir in (1, -1) and st_dir in (1, -1) and last_st_dir != st_dir)
+
+        # ---------- RISK EXITS (simulated on OHLC, before strategy decision) ----------
+        # Backtest uses index OHLC as proxy; this is points-based and not rupee-accurate.
+        if position_side and entry_price is not None:
+            stoploss_points = float(initial_stoploss or 0.0)
+            tgt_points = float(target_points or 0.0)
+            trail_start = float(trail_start_profit or 0.0)
+            trail_step_points = float(trail_step or 0.0)
+
+            exit_reason: Optional[str] = None
+            exit_price: Optional[float] = None
+
+            if position_side == "CE":
+                best_favorable_points = max(best_favorable_points, high - entry_price)
+
+                # Stop level(s)
+                initial_stop_level = (entry_price - stoploss_points) if stoploss_points > 0 else None
+
+                trailing_level = None
+                if trail_start > 0 and trail_step_points > 0 and best_favorable_points >= trail_start:
+                    steps = int((best_favorable_points - trail_start) / trail_step_points)
+                    trailing_level = entry_price + (steps * trail_step_points)
+
+                effective_stop = None
+                if initial_stop_level is not None and trailing_level is not None:
+                    effective_stop = max(initial_stop_level, trailing_level)
+                else:
+                    effective_stop = trailing_level if trailing_level is not None else initial_stop_level
+
+                # Worst-case priority: stop first, then target
+                if effective_stop is not None and low <= effective_stop:
+                    exit_price = float(effective_stop)
+                    exit_reason = "Trailing SL Hit" if trailing_level is not None and effective_stop == trailing_level else "Stoploss Hit"
+                elif tgt_points > 0 and high >= (entry_price + tgt_points):
+                    exit_price = float(entry_price + tgt_points)
+                    exit_reason = "Target Hit"
+
+            elif position_side == "PE":
+                best_favorable_points = max(best_favorable_points, entry_price - low)
+
+                initial_stop_level = (entry_price + stoploss_points) if stoploss_points > 0 else None
+
+                trailing_level = None
+                if trail_start > 0 and trail_step_points > 0 and best_favorable_points >= trail_start:
+                    steps = int((best_favorable_points - trail_start) / trail_step_points)
+                    trailing_level = entry_price - (steps * trail_step_points)
+
+                effective_stop = None
+                if initial_stop_level is not None and trailing_level is not None:
+                    effective_stop = min(initial_stop_level, trailing_level)
+                else:
+                    effective_stop = trailing_level if trailing_level is not None else initial_stop_level
+
+                if effective_stop is not None and high >= effective_stop:
+                    exit_price = float(effective_stop)
+                    exit_reason = "Trailing SL Hit" if trailing_level is not None and effective_stop == trailing_level else "Stoploss Hit"
+                elif tgt_points > 0 and low <= (entry_price - tgt_points):
+                    exit_price = float(entry_price - tgt_points)
+                    exit_reason = "Target Hit"
+
+            if exit_reason and exit_price is not None:
+                pnl = _calc_points_pnl(position_side, entry_price, exit_price)
+                equity += pnl
+                equity_curve.append(equity)
+
+                trades[-1].exit_time = ts
+                trades[-1].exit_price = exit_price
+                trades[-1].pnl_points = pnl
+                trades[-1].exit_reason = exit_reason
+
+                position_side = None
+                entry_time = None
+                entry_price = None
+                best_favorable_points = 0.0
+
+                last_macd = float(macd_val)
+                last_st_dir = st_dir
+                continue
 
         action = AgentAction.HOLD
         if mode == "agent":
@@ -127,6 +212,7 @@ def run_backtest(
             position_side = "CE" if action == AgentAction.ENTER_CE else "PE"
             entry_time = ts
             entry_price = close
+            best_favorable_points = 0.0
             trades.append(
                 BacktestTrade(
                     side=position_side,
@@ -149,18 +235,20 @@ def run_backtest(
             trades[-1].exit_time = ts
             trades[-1].exit_price = exit_price
             trades[-1].pnl_points = pnl
-            trades[-1].exit_reason = "EXIT"
+            trades[-1].exit_reason = "Agent Exit" if mode == "agent" else "Flip Exit"
 
             position_side = None
             entry_time = None
             entry_price = None
+            best_favorable_points = 0.0
 
         last_macd = float(macd_val)
         last_st_dir = st_dir
 
     if close_open_position_at_end and position_side and entry_price is not None and candles:
         last = candles[-1]
-        ts = str(last.get("timestamp") or last.get("created_at") or "")
+        ts_raw = str(last.get("timestamp") or last.get("created_at") or "")
+        ts = iso_to_ist_iso(ts_raw) or ts_raw
         close = float(last["close"])
         pnl = _calc_points_pnl(position_side, entry_price, close)
         equity += pnl
@@ -193,6 +281,10 @@ def run_backtest(
             "supertrend_multiplier": supertrend_multiplier,
             "agent_adx_min": agent_adx_min,
             "agent_wave_reset_macd_abs": agent_wave_reset_macd_abs,
+            "initial_stoploss": float(initial_stoploss or 0.0),
+            "target_points": float(target_points or 0.0),
+            "trail_start_profit": float(trail_start_profit or 0.0),
+            "trail_step": float(trail_step or 0.0),
         },
         "metrics": {
             "total_trades": total_trades,
@@ -207,9 +299,9 @@ def run_backtest(
                 "side": t.side,
                 "entry_time": t.entry_time,
                 "exit_time": t.exit_time,
-                "entry_price": t.entry_price,
-                "exit_price": t.exit_price,
-                "pnl_points": t.pnl_points,
+                "entry_price": round(float(t.entry_price), 2) if t.entry_price is not None else None,
+                "exit_price": round(float(t.exit_price), 2) if t.exit_price is not None else None,
+                "pnl_points": round(float(t.pnl_points), 2) if t.pnl_points is not None else None,
                 "exit_reason": t.exit_reason,
             }
             for t in closed_trades

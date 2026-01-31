@@ -18,6 +18,7 @@ const DailySummary = () => {
         </div>
         <span className="text-xs text-gray-500 font-mono">
           {new Date().toLocaleDateString("en-IN", {
+            timeZone: "Asia/Kolkata",
             weekday: "short",
             day: "numeric",
             month: "short",

@@ -65,6 +65,7 @@ const PositionPanel = () => {
             <p className="text-sm font-mono text-gray-700">
               {position.expiry
                 ? new Date(position.expiry).toLocaleDateString("en-IN", {
+                    timeZone: "Asia/Kolkata",
                     day: "2-digit",
                     month: "short",
                   })

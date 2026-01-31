@@ -39,6 +39,10 @@ const TradesAnalysis = () => {
   const [btStrategyMode, setBtStrategyMode] = useState('agent');
   const [btStartTime, setBtStartTime] = useState('');
   const [btEndTime, setBtEndTime] = useState('');
+  const [btInitialStoploss, setBtInitialStoploss] = useState('50');
+  const [btTargetPoints, setBtTargetPoints] = useState('5');
+  const [btTrailStartProfit, setBtTrailStartProfit] = useState('0');
+  const [btTrailStep, setBtTrailStep] = useState('0');
 
   useEffect(() => {
     fetchAnalytics();
@@ -78,6 +82,10 @@ const TradesAnalysis = () => {
         start_time: btStartTime.trim() ? btStartTime.trim() : null,
         end_time: btEndTime.trim() ? btEndTime.trim() : null,
         strategy_mode: btStrategyMode,
+        initial_stoploss: btInitialStoploss.trim() ? Number(btInitialStoploss) : null,
+        target_points: btTargetPoints.trim() ? Number(btTargetPoints) : null,
+        trail_start_profit: btTrailStartProfit.trim() ? Number(btTrailStartProfit) : null,
+        trail_step: btTrailStep.trim() ? Number(btTrailStep) : null,
         close_open_position_at_end: true
       };
 
@@ -158,7 +166,7 @@ const TradesAnalysis = () => {
     // Group by day
     const byDay = {};
     trades.forEach(trade => {
-      const day = new Date(trade.entry_time).toLocaleDateString('en-IN');
+        const day = new Date(trade.entry_time).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
       if (!byDay[day]) {
         byDay[day] = { count: 0, pnl: 0, wins: 0 };
       }
@@ -290,6 +298,7 @@ const TradesAnalysis = () => {
     if (!isoString) return '-';
     const date = new Date(isoString);
     return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -898,6 +907,53 @@ const TradesAnalysis = () => {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Initial SL (points)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={btInitialStoploss}
+                        onChange={(e) => setBtInitialStoploss(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Target (points)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={btTargetPoints}
+                        onChange={(e) => setBtTargetPoints(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Trail Start (points)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={btTrailStartProfit}
+                        onChange={(e) => setBtTrailStartProfit(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">Trail Step (points)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={btTrailStep}
+                        onChange={(e) => setBtTrailStep(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex gap-2">
                     <Button
                       onClick={runBacktest}
@@ -926,21 +982,21 @@ const TradesAnalysis = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <StatCard
                           label="PnL (points)"
-                          value={`${backtestResult?.metrics?.total_pnl_points ?? 0}`}
+                          value={`${Number(backtestResult?.metrics?.total_pnl_points ?? 0).toFixed(2)}`}
                           subtext={`Trades: ${backtestResult?.metrics?.total_trades ?? 0}`}
                           icon={(backtestResult?.metrics?.total_pnl_points ?? 0) >= 0 ? TrendingUp : TrendingDown}
                           isPositive={(backtestResult?.metrics?.total_pnl_points ?? 0) >= 0}
                         />
                         <StatCard
                           label="Win Rate"
-                          value={`${backtestResult?.metrics?.win_rate ?? 0}%`}
-                          subtext={`Avg win: ${backtestResult?.metrics?.avg_win ?? 0}`}
+                          value={`${Number(backtestResult?.metrics?.win_rate ?? 0).toFixed(2)}%`}
+                          subtext={`Avg win: ${Number(backtestResult?.metrics?.avg_win ?? 0).toFixed(2)}`}
                           isPositive={(backtestResult?.metrics?.win_rate ?? 0) >= 50}
                         />
                         <StatCard
                           label="Avg Loss"
-                          value={`${backtestResult?.metrics?.avg_loss ?? 0}`}
-                          subtext={`Max DD: ${backtestResult?.metrics?.max_drawdown ?? 0}`}
+                          value={`${Number(backtestResult?.metrics?.avg_loss ?? 0).toFixed(2)}`}
+                          subtext={`Max DD: ${Number(backtestResult?.metrics?.max_drawdown ?? 0).toFixed(2)}`}
                           isPositive={false}
                         />
                         <StatCard
@@ -977,13 +1033,13 @@ const TradesAnalysis = () => {
                                           {t.side}
                                         </Badge>
                                       </TableCell>
-                                      <TableCell className="text-slate-300 text-xs">{t.entry_time}</TableCell>
-                                      <TableCell className="text-slate-300 text-xs">{t.exit_time}</TableCell>
-                                      <TableCell className="text-slate-300 text-right">{t.entry_price}</TableCell>
-                                      <TableCell className="text-slate-300 text-right">{t.exit_price}</TableCell>
+                                      <TableCell className="text-slate-300 text-xs">{formatDate(t.entry_time)}</TableCell>
+                                      <TableCell className="text-slate-300 text-xs">{formatDate(t.exit_time)}</TableCell>
+                                      <TableCell className="text-slate-300 text-right">{Number(t.entry_price ?? 0).toFixed(2)}</TableCell>
+                                      <TableCell className="text-slate-300 text-right">{Number(t.exit_price ?? 0).toFixed(2)}</TableCell>
                                       <TableCell className="text-right">
-                                        <span className={`font-semibold ${t.pnl_points >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                          {t.pnl_points >= 0 ? '+' : ''}{t.pnl_points}
+                                        <span className={`font-semibold ${Number(t.pnl_points ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                          {Number(t.pnl_points ?? 0) >= 0 ? '+' : ''}{Number(t.pnl_points ?? 0).toFixed(2)}
                                         </span>
                                       </TableCell>
                                       <TableCell className="text-slate-400 text-xs">{t.exit_reason}</TableCell>

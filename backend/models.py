@@ -93,6 +93,13 @@ class BacktestRequest(BaseModel):
     agent_adx_min: Optional[float] = None
     agent_wave_reset_macd_abs: Optional[float] = None
 
+    # Risk / exits (points-based, simulated on candle OHLC)
+    # If omitted, server will use current config defaults.
+    initial_stoploss: Optional[float] = None
+    target_points: Optional[float] = None
+    trail_start_profit: Optional[float] = None
+    trail_step: Optional[float] = None
+
     close_open_position_at_end: bool = True
 
 

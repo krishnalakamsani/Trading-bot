@@ -20,6 +20,7 @@ import bot_service
 from backtest import run_backtest
 from dhan_history import DhanHistoryClient
 from indices import get_index_config
+from time_utils import iso_to_ist_iso
 
 # Configure logging
 logging.basicConfig(
@@ -278,12 +279,16 @@ async def run_backtest_endpoint(req: BacktestRequest):
             if req.agent_wave_reset_macd_abs is not None
             else config.get('agent_wave_reset_macd_abs', 0.05)
         ),
+        initial_stoploss=float(req.initial_stoploss if req.initial_stoploss is not None else config.get('initial_stoploss', 0)),
+        target_points=float(req.target_points if req.target_points is not None else config.get('target_points', 0)),
+        trail_start_profit=float(req.trail_start_profit if req.trail_start_profit is not None else config.get('trail_start_profit', 0)),
+        trail_step=float(req.trail_step if req.trail_step is not None else config.get('trail_step', 0)),
         close_open_position_at_end=bool(req.close_open_position_at_end),
     )
     # Attach minimal candle range metadata
     result["meta"]["index_name"] = req.index_name
-    result["meta"]["start_time"] = candles[0].get("timestamp")
-    result["meta"]["end_time"] = candles[-1].get("timestamp")
+    result["meta"]["start_time"] = iso_to_ist_iso(candles[0].get("timestamp")) or candles[0].get("timestamp")
+    result["meta"]["end_time"] = iso_to_ist_iso(candles[-1].get("timestamp")) or candles[-1].get("timestamp")
     return result
 
 

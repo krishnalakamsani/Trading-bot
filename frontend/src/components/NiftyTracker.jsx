@@ -29,6 +29,7 @@ const NiftyTracker = () => {
       setPriceHistory((prev) => {
         const newEntry = {
           time: new Date().toLocaleTimeString("en-IN", {
+            timeZone: "Asia/Kolkata",
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
