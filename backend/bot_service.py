@@ -184,6 +184,7 @@ def get_config() -> dict:
 
         # Strategy / Agent
         "strategy_mode": config.get('strategy_mode', 'agent'),
+        "signal_source": config.get('signal_source', 'index'),
         "agent_adx_min": config.get('agent_adx_min', 20.0),
         "agent_wave_reset_macd_abs": config.get('agent_wave_reset_macd_abs', 0.05),
         "persist_agent_state": config.get('persist_agent_state', True),
@@ -275,6 +276,22 @@ async def update_config_values(updates: dict) -> dict:
                 f"[CONFIG] Invalid strategy_mode: {requested} (normalized: {normalized}). Allowed: agent|supertrend"
             )
 
+    if updates.get('signal_source') is not None:
+        requested = str(updates['signal_source']).strip().lower()
+        if requested in ('index', 'option_fixed'):
+            config['signal_source'] = requested
+            bot_state['signal_source'] = requested
+            updated_fields.append('signal_source')
+            logger.info(f"[CONFIG] Signal source changed to: {requested}")
+
+            # Reset indicators & fixed-contract metadata when switching sources
+            bot = get_trading_bot()
+            bot.reset_indicator()
+        else:
+            logger.warning(
+                f"[CONFIG] Invalid signal_source: {requested}. Allowed: index|option_fixed"
+            )
+
     if updates.get('agent_adx_min') is not None:
         val = float(updates['agent_adx_min'])
         config['agent_adx_min'] = max(0.0, min(100.0, val))
@@ -293,7 +310,7 @@ async def update_config_values(updates: dict) -> dict:
         logger.info(f"[CONFIG] Persist agent state: {config['persist_agent_state']}")
 
     # Apply strategy/agent config live (no restart required)
-    if any(k in updates for k in ('strategy_mode', 'agent_adx_min', 'agent_wave_reset_macd_abs', 'persist_agent_state')):
+    if any(k in updates for k in ('strategy_mode', 'signal_source', 'agent_adx_min', 'agent_wave_reset_macd_abs', 'persist_agent_state')):
         bot = get_trading_bot()
         bot.apply_strategy_config()
         

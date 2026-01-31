@@ -21,6 +21,7 @@ class ConfigUpdate(BaseModel):
 
     # Strategy / Agent
     strategy_mode: Optional[str] = None  # 'agent' | 'supertrend'
+    signal_source: Optional[str] = None  # 'index' | 'option_fixed'
     agent_adx_min: Optional[float] = None
     agent_wave_reset_macd_abs: Optional[float] = None
     persist_agent_state: Optional[bool] = None

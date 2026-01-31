@@ -38,6 +38,45 @@ class TradingBot:
             adx_min=float(config.get('agent_adx_min', 20.0)),
             wave_reset_macd_abs=float(config.get('agent_wave_reset_macd_abs', 0.05)),
         )
+
+        # Option-fixed signal engines (long-only per contract)
+        self.option_ce_agent = STAdxMacdAgent(
+            adx_min=float(config.get('agent_adx_min', 20.0)),
+            wave_reset_macd_abs=float(config.get('agent_wave_reset_macd_abs', 0.05)),
+        )
+        self.option_pe_agent = STAdxMacdAgent(
+            adx_min=float(config.get('agent_adx_min', 20.0)),
+            wave_reset_macd_abs=float(config.get('agent_wave_reset_macd_abs', 0.05)),
+        )
+
+        self.fixed_option_strike = None
+        self.fixed_option_expiry = None
+        self.fixed_ce_security_id = None
+        self.fixed_pe_security_id = None
+
+        # Separate option-candle indicators
+        self.opt_ce_st = None
+        self.opt_ce_macd = None
+        self.opt_ce_adx = None
+        self.opt_pe_st = None
+        self.opt_pe_macd = None
+        self.opt_pe_adx = None
+
+        self._opt_ce_last_macd_value = None
+        self._opt_pe_last_macd_value = None
+        self._opt_ce_last_st_direction = None
+        self._opt_pe_last_st_direction = None
+
+        # Option candle builder state
+        self._ce_open = 0.0
+        self._ce_high = 0.0
+        self._ce_low = float('inf')
+        self._ce_close = 0.0
+
+        self._pe_open = 0.0
+        self._pe_high = 0.0
+        self._pe_low = float('inf')
+        self._pe_close = 0.0
         self._last_macd_value = None
         self._last_st_direction = None
         self._agent_state_path = Path(DB_PATH).parent / 'agent_state.json'
@@ -48,6 +87,7 @@ class TradingBot:
 
         # Keep bot_state strategy_mode in sync for API/WS
         bot_state['strategy_mode'] = config.get('strategy_mode', 'agent')
+        bot_state['signal_source'] = config.get('signal_source', 'index')
     
     def initialize_dhan(self):
         """Initialize Dhan API connection"""
@@ -85,11 +125,52 @@ class TradingBot:
         if self.adx_indicator:
             self.adx_indicator.reset()
 
+        if self.opt_ce_st:
+            self.opt_ce_st.reset()
+        if self.opt_ce_macd:
+            self.opt_ce_macd.reset()
+        if self.opt_ce_adx:
+            self.opt_ce_adx.reset()
+        if self.opt_pe_st:
+            self.opt_pe_st.reset()
+        if self.opt_pe_macd:
+            self.opt_pe_macd.reset()
+        if self.opt_pe_adx:
+            self.opt_pe_adx.reset()
+
         self.apply_strategy_config()
         self.strategy_agent.reset_session("RESET")
+        self.option_ce_agent.reset_session("RESET")
+        self.option_pe_agent.reset_session("RESET")
         self._try_load_agent_state()
         self._last_macd_value = None
         self._last_st_direction = None
+
+        self._opt_ce_last_macd_value = None
+        self._opt_pe_last_macd_value = None
+        self._opt_ce_last_st_direction = None
+        self._opt_pe_last_st_direction = None
+
+        # Clear fixed-contract metadata (will be re-initialized lazily)
+        self.fixed_option_strike = None
+        self.fixed_option_expiry = None
+        self.fixed_ce_security_id = None
+        self.fixed_pe_security_id = None
+        bot_state['fixed_option_strike'] = None
+        bot_state['fixed_option_expiry'] = None
+        bot_state['fixed_ce_security_id'] = None
+        bot_state['fixed_pe_security_id'] = None
+
+        # Reset option candle builder
+        self._ce_open = 0.0
+        self._ce_high = 0.0
+        self._ce_low = float('inf')
+        self._ce_close = 0.0
+        self._pe_open = 0.0
+        self._pe_high = 0.0
+        self._pe_low = float('inf')
+        self._pe_close = 0.0
+
         logger.info(
             f"[SIGNAL] Indicator reset: {config.get('indicator_type', 'supertrend')} (Strategy: {config.get('strategy_mode', 'agent')})"
         )
@@ -98,11 +179,65 @@ class TradingBot:
         """Apply config-driven strategy settings to the agent instance."""
         # Keep bot_state updated for API/WS
         bot_state['strategy_mode'] = config.get('strategy_mode', 'agent')
+        bot_state['signal_source'] = config.get('signal_source', 'index')
 
         self.strategy_agent.adx_min = float(config.get('agent_adx_min', self.strategy_agent.adx_min))
         self.strategy_agent.wave_reset_macd_abs = float(
             config.get('agent_wave_reset_macd_abs', self.strategy_agent.wave_reset_macd_abs)
         )
+
+        self.option_ce_agent.adx_min = float(config.get('agent_adx_min', self.option_ce_agent.adx_min))
+        self.option_ce_agent.wave_reset_macd_abs = float(
+            config.get('agent_wave_reset_macd_abs', self.option_ce_agent.wave_reset_macd_abs)
+        )
+        self.option_pe_agent.adx_min = float(config.get('agent_adx_min', self.option_pe_agent.adx_min))
+        self.option_pe_agent.wave_reset_macd_abs = float(
+            config.get('agent_wave_reset_macd_abs', self.option_pe_agent.wave_reset_macd_abs)
+        )
+
+        # Ensure option signal indicators exist
+        if self.opt_ce_st is None or self.opt_pe_st is None:
+            self.opt_ce_st = SuperTrend(period=config['supertrend_period'], multiplier=config['supertrend_multiplier'])
+            self.opt_ce_macd = MACD()
+            self.opt_ce_adx = ADX()
+            self.opt_pe_st = SuperTrend(period=config['supertrend_period'], multiplier=config['supertrend_multiplier'])
+            self.opt_pe_macd = MACD()
+            self.opt_pe_adx = ADX()
+
+    async def _ensure_fixed_option_contract(self, index_name: str, index_ltp: float) -> bool:
+        """Pick and cache a fixed CE+PE contract for signal generation."""
+        if self.fixed_ce_security_id and self.fixed_pe_security_id and self.fixed_option_strike and self.fixed_option_expiry:
+            return True
+        if not self.dhan:
+            return False
+        if not index_ltp or index_ltp <= 0:
+            return False
+
+        try:
+            strike = round_to_strike(index_ltp, index_name)
+            expiry = await self.dhan.get_nearest_expiry(index_name)
+            ce_sid = await self.dhan.get_atm_option_security_id(index_name, strike, 'CE', expiry)
+            pe_sid = await self.dhan.get_atm_option_security_id(index_name, strike, 'PE', expiry)
+            if not ce_sid or not pe_sid:
+                return False
+
+            self.fixed_option_strike = int(strike)
+            self.fixed_option_expiry = str(expiry)
+            self.fixed_ce_security_id = str(ce_sid)
+            self.fixed_pe_security_id = str(pe_sid)
+
+            bot_state['fixed_option_strike'] = self.fixed_option_strike
+            bot_state['fixed_option_expiry'] = self.fixed_option_expiry
+            bot_state['fixed_ce_security_id'] = self.fixed_ce_security_id
+            bot_state['fixed_pe_security_id'] = self.fixed_pe_security_id
+
+            logger.info(
+                f"[SIGNAL] Fixed option contract set | {index_name} {strike} | Expiry={expiry} | CE={ce_sid} PE={pe_sid}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[SIGNAL] Failed to set fixed option contract: {e}")
+            return False
 
     def _try_load_agent_state(self) -> None:
         if not config.get('persist_agent_state', True):
@@ -345,26 +480,83 @@ class TradingBot:
                 
                 # Fetch market data
                 if self.dhan:
-                    has_position = self.current_position is not None
-                    option_security_id = None
-                    
-                    if has_position:
-                        security_id = self.current_position.get('security_id', '')
-                        if security_id and not security_id.startswith('SIM_'):
-                            option_security_id = int(security_id)
-                    
-                    # Fetch Index + Option LTP
-                    if option_security_id:
-                        index_ltp, option_ltp = self.dhan.get_index_and_option_ltp(index_name, option_security_id)
-                        if index_ltp > 0:
-                            bot_state['index_ltp'] = index_ltp
-                        if option_ltp > 0:
-                            option_ltp = round(option_ltp / 0.05) * 0.05
-                            bot_state['current_option_ltp'] = round(option_ltp, 2)
+                    signal_source = config.get('signal_source', 'index')
+                    bot_state['signal_source'] = signal_source
+
+                    if signal_source == 'option_fixed':
+                        # Always keep index_ltp updated (used for UI + contract selection)
+                        idx = self.dhan.get_index_ltp(index_name)
+                        if idx > 0:
+                            bot_state['index_ltp'] = float(idx)
+
+                        # Ensure the fixed contract exists (strike/expiry/security IDs)
+                        fixed_ready = await self._ensure_fixed_option_contract(index_name, float(bot_state.get('index_ltp', 0.0)))
+                        if fixed_ready:
+                            ce_sid = bot_state.get('fixed_ce_security_id')
+                            pe_sid = bot_state.get('fixed_pe_security_id')
+
+                            ids: list[int] = []
+                            if ce_sid:
+                                try:
+                                    ids.append(int(ce_sid))
+                                except Exception:
+                                    pass
+                            if pe_sid:
+                                try:
+                                    ids.append(int(pe_sid))
+                                except Exception:
+                                    pass
+
+                            if ids:
+                                idx2, option_ltps = self.dhan.get_index_and_options_ltp(index_name, ids)
+                                if idx2 and idx2 > 0:
+                                    bot_state['index_ltp'] = float(idx2)
+
+                                if ce_sid:
+                                    ce_val = option_ltps.get(int(ce_sid), 0.0)
+                                    if ce_val and ce_val > 0:
+                                        ce_val = round(float(ce_val) / 0.05) * 0.05
+                                        bot_state['signal_ce_ltp'] = round(float(ce_val), 2)
+                                if pe_sid:
+                                    pe_val = option_ltps.get(int(pe_sid), 0.0)
+                                    if pe_val and pe_val > 0:
+                                        pe_val = round(float(pe_val) / 0.05) * 0.05
+                                        bot_state['signal_pe_ltp'] = round(float(pe_val), 2)
+
+                                # Keep current position LTP in sync (for SL/target checks)
+                                if self.current_position:
+                                    pos_sid = str(self.current_position.get('security_id', ''))
+                                    if pos_sid and not pos_sid.startswith('SIM_'):
+                                        try:
+                                            pos_sid_int = int(pos_sid)
+                                            pos_ltp = option_ltps.get(pos_sid_int, 0.0)
+                                            if pos_ltp and pos_ltp > 0:
+                                                pos_ltp = round(float(pos_ltp) / 0.05) * 0.05
+                                                bot_state['current_option_ltp'] = round(float(pos_ltp), 2)
+                                        except Exception:
+                                            pass
+
                     else:
-                        index_ltp = self.dhan.get_index_ltp(index_name)
-                        if index_ltp > 0:
-                            bot_state['index_ltp'] = index_ltp
+                        has_position = self.current_position is not None
+                        option_security_id = None
+
+                        if has_position:
+                            security_id = self.current_position.get('security_id', '')
+                            if security_id and not security_id.startswith('SIM_'):
+                                option_security_id = int(security_id)
+
+                        # Fetch Index + Option LTP
+                        if option_security_id:
+                            index_ltp, option_ltp = self.dhan.get_index_and_option_ltp(index_name, option_security_id)
+                            if index_ltp > 0:
+                                bot_state['index_ltp'] = index_ltp
+                            if option_ltp > 0:
+                                option_ltp = round(option_ltp / 0.05) * 0.05
+                                bot_state['current_option_ltp'] = round(option_ltp, 2)
+                        else:
+                            index_ltp = self.dhan.get_index_ltp(index_name)
+                            if index_ltp > 0:
+                                bot_state['index_ltp'] = index_ltp
                 
                 # If no data from API (market closed or no credentials), simulate index movement for testing
                 if bot_state['index_ltp'] == 0 and config.get('bypass_market_hours', False):
@@ -399,6 +591,29 @@ class TradingBot:
                     if index_ltp < low:
                         low = index_ltp
                     close = index_ltp
+
+                # Build option candles for fixed-contract signals (from option LTP ticks)
+                if config.get('signal_source', 'index') == 'option_fixed':
+                    ce_ltp = float(bot_state.get('signal_ce_ltp', 0.0) or 0.0)
+                    pe_ltp = float(bot_state.get('signal_pe_ltp', 0.0) or 0.0)
+
+                    if ce_ltp > 0:
+                        if self._ce_open == 0.0:
+                            self._ce_open = float(ce_ltp)
+                        if self._ce_high == 0.0 or ce_ltp > self._ce_high:
+                            self._ce_high = float(ce_ltp)
+                        if ce_ltp < self._ce_low:
+                            self._ce_low = float(ce_ltp)
+                        self._ce_close = float(ce_ltp)
+
+                    if pe_ltp > 0:
+                        if self._pe_open == 0.0:
+                            self._pe_open = float(pe_ltp)
+                        if self._pe_high == 0.0 or pe_ltp > self._pe_high:
+                            self._pe_high = float(pe_ltp)
+                        if pe_ltp < self._pe_low:
+                            self._pe_low = float(pe_ltp)
+                        self._pe_close = float(pe_ltp)
                 
                 # Check SL/Target on EVERY TICK (responsive protection)
                 if self.current_position and bot_state['current_option_ltp'] > 0:
@@ -493,36 +708,236 @@ class TradingBot:
 
                         # Strategy agent decision (strategy-only)
                         strategy_mode = config.get('strategy_mode', 'agent')
+                        signal_source = config.get('signal_source', 'index')
                         action = AgentAction.HOLD
 
-                        if strategy_mode == 'supertrend':
-                            # Simple fallback: trade only on ST flip
-                            if self.current_position is None:
-                                if supertrend_flipped and st_direction == 1:
-                                    action = AgentAction.ENTER_CE
-                                elif supertrend_flipped and st_direction == -1:
-                                    action = AgentAction.ENTER_PE
-                            else:
-                                if supertrend_flipped:
-                                    action = AgentAction.EXIT
-                        else:
-                            # Default: ST + ADX + MACD agent
+                        if signal_source == 'option_fixed':
+                            # Fixed-contract option-candle signals
                             self.apply_strategy_config()
-                            inputs = AgentInputs(
-                                timestamp=datetime.now(timezone.utc).isoformat(),
-                                open=float(open_price),
-                                high=float(high),
-                                low=float(low),
-                                close=float(close),
-                                supertrend_direction=st_direction if st_direction in (1, -1) else None,
-                                supertrend_flipped=bool(supertrend_flipped),
-                                adx_value=float(adx_value) if isinstance(adx_value, (int, float)) else None,
-                                macd_current=float(macd_current) if isinstance(macd_current, (int, float)) else None,
-                                macd_previous=float(macd_previous) if isinstance(macd_previous, (int, float)) else None,
-                                in_position=self.current_position is not None,
-                                current_position_side=(self.current_position.get('option_type') if self.current_position else None),
-                            )
-                            action = self.strategy_agent.decide(inputs)
+
+                            strike = bot_state.get('fixed_option_strike')
+                            expiry = bot_state.get('fixed_option_expiry')
+                            ce_sid = bot_state.get('fixed_ce_security_id')
+                            pe_sid = bot_state.get('fixed_pe_security_id')
+
+                            ce_ready = self._ce_high > 0 and self._ce_low < float('inf') and self._ce_close > 0
+                            pe_ready = self._pe_high > 0 and self._pe_low < float('inf') and self._pe_close > 0
+
+                            ce_action = AgentAction.HOLD
+                            pe_action = AgentAction.HOLD
+
+                            ce_macd_previous = self._opt_ce_last_macd_value
+                            ce_prev_st_direction = self._opt_ce_last_st_direction
+                            pe_macd_previous = self._opt_pe_last_macd_value
+                            pe_prev_st_direction = self._opt_pe_last_st_direction
+
+                            # Decide exits first (only for the held contract)
+                            if self.current_position and self.current_position.get('option_type') == 'CE' and ce_ready:
+                                ce_st_val, _ = self.opt_ce_st.add_candle(self._ce_high, self._ce_low, self._ce_close)
+                                ce_st_direction = getattr(self.opt_ce_st, 'direction', None)
+                                ce_flipped = (
+                                    ce_prev_st_direction is not None
+                                    and ce_st_direction in (1, -1)
+                                    and ce_st_direction != ce_prev_st_direction
+                                )
+                                if ce_st_direction in (1, -1):
+                                    self._opt_ce_last_st_direction = ce_st_direction
+
+                                ce_macd_current, _ = self.opt_ce_macd.add_candle(self._ce_high, self._ce_low, self._ce_close)
+                                if ce_macd_current is not None:
+                                    self._opt_ce_last_macd_value = ce_macd_current
+                                ce_adx_value, _ = self.opt_ce_adx.add_candle(self._ce_high, self._ce_low, self._ce_close)
+
+                                if strategy_mode == 'supertrend':
+                                    if ce_flipped:
+                                        action = AgentAction.EXIT
+                                else:
+                                    inputs_ce = AgentInputs(
+                                        timestamp=datetime.now(timezone.utc).isoformat(),
+                                        open=float(self._ce_open),
+                                        high=float(self._ce_high),
+                                        low=float(self._ce_low),
+                                        close=float(self._ce_close),
+                                        supertrend_direction=ce_st_direction if ce_st_direction in (1, -1) else None,
+                                        supertrend_flipped=bool(ce_flipped),
+                                        adx_value=float(ce_adx_value) if isinstance(ce_adx_value, (int, float)) else None,
+                                        macd_current=float(ce_macd_current) if isinstance(ce_macd_current, (int, float)) else None,
+                                        macd_previous=float(ce_macd_previous) if isinstance(ce_macd_previous, (int, float)) else None,
+                                        in_position=True,
+                                        current_position_side='CE',
+                                    )
+                                    action = self.option_ce_agent.decide(inputs_ce)
+                                    if action != AgentAction.EXIT:
+                                        action = AgentAction.HOLD
+
+                            elif self.current_position and self.current_position.get('option_type') == 'PE' and pe_ready:
+                                pe_st_val, _ = self.opt_pe_st.add_candle(self._pe_high, self._pe_low, self._pe_close)
+                                pe_st_direction = getattr(self.opt_pe_st, 'direction', None)
+                                pe_flipped = (
+                                    pe_prev_st_direction is not None
+                                    and pe_st_direction in (1, -1)
+                                    and pe_st_direction != pe_prev_st_direction
+                                )
+                                if pe_st_direction in (1, -1):
+                                    self._opt_pe_last_st_direction = pe_st_direction
+
+                                pe_macd_current, _ = self.opt_pe_macd.add_candle(self._pe_high, self._pe_low, self._pe_close)
+                                if pe_macd_current is not None:
+                                    self._opt_pe_last_macd_value = pe_macd_current
+                                pe_adx_value, _ = self.opt_pe_adx.add_candle(self._pe_high, self._pe_low, self._pe_close)
+
+                                if strategy_mode == 'supertrend':
+                                    if pe_flipped:
+                                        action = AgentAction.EXIT
+                                else:
+                                    inputs_pe = AgentInputs(
+                                        timestamp=datetime.now(timezone.utc).isoformat(),
+                                        open=float(self._pe_open),
+                                        high=float(self._pe_high),
+                                        low=float(self._pe_low),
+                                        close=float(self._pe_close),
+                                        supertrend_direction=pe_st_direction if pe_st_direction in (1, -1) else None,
+                                        supertrend_flipped=bool(pe_flipped),
+                                        adx_value=float(pe_adx_value) if isinstance(pe_adx_value, (int, float)) else None,
+                                        macd_current=float(pe_macd_current) if isinstance(pe_macd_current, (int, float)) else None,
+                                        macd_previous=float(pe_macd_previous) if isinstance(pe_macd_previous, (int, float)) else None,
+                                        in_position=True,
+                                        current_position_side='CE',
+                                    )
+                                    action = self.option_pe_agent.decide(inputs_pe)
+                                    if action != AgentAction.EXIT:
+                                        action = AgentAction.HOLD
+
+                            # Entries (only if flat)
+                            if not self.current_position and action == AgentAction.HOLD and ce_ready and pe_ready and strike and expiry and ce_sid and pe_sid:
+                                # Compute CE candle indicators
+                                ce_prev_dir = self._opt_ce_last_st_direction
+                                ce_st_val, _ = self.opt_ce_st.add_candle(self._ce_high, self._ce_low, self._ce_close)
+                                ce_dir = getattr(self.opt_ce_st, 'direction', None)
+                                ce_flip = (
+                                    ce_prev_dir is not None
+                                    and ce_dir in (1, -1)
+                                    and ce_dir != ce_prev_dir
+                                )
+                                if ce_dir in (1, -1):
+                                    self._opt_ce_last_st_direction = ce_dir
+
+                                ce_macd_curr, _ = self.opt_ce_macd.add_candle(self._ce_high, self._ce_low, self._ce_close)
+                                if ce_macd_curr is not None:
+                                    self._opt_ce_last_macd_value = ce_macd_curr
+                                ce_adx_val, _ = self.opt_ce_adx.add_candle(self._ce_high, self._ce_low, self._ce_close)
+
+                                # Compute PE candle indicators
+                                pe_prev_dir = self._opt_pe_last_st_direction
+                                pe_st_val, _ = self.opt_pe_st.add_candle(self._pe_high, self._pe_low, self._pe_close)
+                                pe_dir = getattr(self.opt_pe_st, 'direction', None)
+                                pe_flip = (
+                                    pe_prev_dir is not None
+                                    and pe_dir in (1, -1)
+                                    and pe_dir != pe_prev_dir
+                                )
+                                if pe_dir in (1, -1):
+                                    self._opt_pe_last_st_direction = pe_dir
+
+                                pe_macd_curr, _ = self.opt_pe_macd.add_candle(self._pe_high, self._pe_low, self._pe_close)
+                                if pe_macd_curr is not None:
+                                    self._opt_pe_last_macd_value = pe_macd_curr
+                                pe_adx_val, _ = self.opt_pe_adx.add_candle(self._pe_high, self._pe_low, self._pe_close)
+
+                                if strategy_mode == 'supertrend':
+                                    if ce_flip and ce_dir == 1:
+                                        ce_action = AgentAction.ENTER_CE
+                                    if pe_flip and pe_dir == 1:
+                                        pe_action = AgentAction.ENTER_CE
+                                else:
+                                    # Long-only per contract: treat ENTER_CE as "enter long" and ignore ENTER_PE.
+                                    inputs_ce = AgentInputs(
+                                        timestamp=datetime.now(timezone.utc).isoformat(),
+                                        open=float(self._ce_open),
+                                        high=float(self._ce_high),
+                                        low=float(self._ce_low),
+                                        close=float(self._ce_close),
+                                        supertrend_direction=ce_dir if ce_dir in (1, -1) else None,
+                                        supertrend_flipped=bool(ce_flip),
+                                        adx_value=float(ce_adx_val) if isinstance(ce_adx_val, (int, float)) else None,
+                                        macd_current=float(ce_macd_curr) if isinstance(ce_macd_curr, (int, float)) else None,
+                                        macd_previous=float(ce_macd_previous) if isinstance(ce_macd_previous, (int, float)) else None,
+                                        in_position=False,
+                                        current_position_side=None,
+                                    )
+                                    ce_action = self.option_ce_agent.decide(inputs_ce)
+
+                                    inputs_pe = AgentInputs(
+                                        timestamp=datetime.now(timezone.utc).isoformat(),
+                                        open=float(self._pe_open),
+                                        high=float(self._pe_high),
+                                        low=float(self._pe_low),
+                                        close=float(self._pe_close),
+                                        supertrend_direction=pe_dir if pe_dir in (1, -1) else None,
+                                        supertrend_flipped=bool(pe_flip),
+                                        adx_value=float(pe_adx_val) if isinstance(pe_adx_val, (int, float)) else None,
+                                        macd_current=float(pe_macd_curr) if isinstance(pe_macd_curr, (int, float)) else None,
+                                        macd_previous=float(pe_macd_previous) if isinstance(pe_macd_previous, (int, float)) else None,
+                                        in_position=False,
+                                        current_position_side=None,
+                                    )
+                                    pe_action = self.option_pe_agent.decide(inputs_pe)
+
+                                # Map long-entry signals to ENTER_CE/ENTER_PE.
+                                ce_enter = ce_action == AgentAction.ENTER_CE
+                                pe_enter = pe_action == AgentAction.ENTER_CE
+
+                                if ce_enter and pe_enter:
+                                    # Tie-break: prefer stronger momentum (abs(MACD)), else CE.
+                                    if isinstance(pe_macd_curr, (int, float)) and isinstance(ce_macd_curr, (int, float)):
+                                        if abs(pe_macd_curr) > abs(ce_macd_curr):
+                                            action = AgentAction.ENTER_PE
+                                        else:
+                                            action = AgentAction.ENTER_CE
+                                    else:
+                                        action = AgentAction.ENTER_CE
+                                elif ce_enter:
+                                    action = AgentAction.ENTER_CE
+                                elif pe_enter:
+                                    action = AgentAction.ENTER_PE
+
+                                if action != AgentAction.HOLD:
+                                    logger.info(
+                                        f"[OPT CANDLE CLOSE #{candle_number}] Fixed {index_name} | Strike={strike} Expiry={expiry} | "
+                                        f"CE O={self._ce_open:.2f} H={self._ce_high:.2f} L={self._ce_low:.2f} C={self._ce_close:.2f} | "
+                                        f"PE O={self._pe_open:.2f} H={self._pe_high:.2f} L={self._pe_low:.2f} C={self._pe_close:.2f}"
+                                    )
+
+                        else:
+                            # Index-candle signals (current behavior)
+                            if strategy_mode == 'supertrend':
+                                # Simple fallback: trade only on ST flip
+                                if self.current_position is None:
+                                    if supertrend_flipped and st_direction == 1:
+                                        action = AgentAction.ENTER_CE
+                                    elif supertrend_flipped and st_direction == -1:
+                                        action = AgentAction.ENTER_PE
+                                else:
+                                    if supertrend_flipped:
+                                        action = AgentAction.EXIT
+                            else:
+                                # Default: ST + ADX + MACD agent
+                                self.apply_strategy_config()
+                                inputs = AgentInputs(
+                                    timestamp=datetime.now(timezone.utc).isoformat(),
+                                    open=float(open_price),
+                                    high=float(high),
+                                    low=float(low),
+                                    close=float(close),
+                                    supertrend_direction=st_direction if st_direction in (1, -1) else None,
+                                    supertrend_flipped=bool(supertrend_flipped),
+                                    adx_value=float(adx_value) if isinstance(adx_value, (int, float)) else None,
+                                    macd_current=float(macd_current) if isinstance(macd_current, (int, float)) else None,
+                                    macd_previous=float(macd_previous) if isinstance(macd_previous, (int, float)) else None,
+                                    in_position=self.current_position is not None,
+                                    current_position_side=(self.current_position.get('option_type') if self.current_position else None),
+                                )
+                                action = self.strategy_agent.decide(inputs)
 
                         self._try_persist_agent_state()
 
@@ -534,13 +949,40 @@ class TradingBot:
                                 can_trade = False
 
                         if can_trade:
-                            exited = await self.process_agent_action_on_close(action, close)
-                            if exited:
-                                self.last_exit_candle_time = current_candle_time
+                            if signal_source == 'option_fixed' and action in (AgentAction.ENTER_CE, AgentAction.ENTER_PE):
+                                strike = bot_state.get('fixed_option_strike')
+                                expiry = bot_state.get('fixed_option_expiry')
+                                ce_sid = bot_state.get('fixed_ce_security_id')
+                                pe_sid = bot_state.get('fixed_pe_security_id')
+
+                                security_id = ce_sid if action == AgentAction.ENTER_CE else pe_sid
+                                if strike and expiry and security_id:
+                                    await self.process_agent_action_on_close_fixed_contract(
+                                        action,
+                                        close,
+                                        strike=int(strike),
+                                        expiry=str(expiry),
+                                        security_id=str(security_id),
+                                    )
+                                    self.last_trade_time = datetime.now()
+                            else:
+                                exited = await self.process_agent_action_on_close(action, close)
+                                if exited:
+                                    self.last_exit_candle_time = current_candle_time
                     
                     # Reset candle for next period
                     candle_start_time = datetime.now()
                     open_price, high, low, close = 0.0, 0, float('inf'), 0
+
+                    # Reset option candle builders
+                    self._ce_open = 0.0
+                    self._ce_high = 0.0
+                    self._ce_low = float('inf')
+                    self._ce_close = 0.0
+                    self._pe_open = 0.0
+                    self._pe_high = 0.0
+                    self._pe_low = float('inf')
+                    self._pe_close = 0.0
                 
                 # Handle paper mode simulation
                 if self.current_position:
@@ -606,6 +1048,13 @@ class TradingBot:
                 "selected_index": config['selected_index'],
                 "candle_interval": config['candle_interval'],
                 "strategy_mode": bot_state.get('strategy_mode', config.get('strategy_mode', 'agent')),
+                "signal_source": bot_state.get('signal_source', config.get('signal_source', 'index')),
+                "fixed_option_strike": bot_state.get('fixed_option_strike'),
+                "fixed_option_expiry": bot_state.get('fixed_option_expiry'),
+                "fixed_ce_security_id": bot_state.get('fixed_ce_security_id'),
+                "fixed_pe_security_id": bot_state.get('fixed_pe_security_id'),
+                "signal_ce_ltp": bot_state.get('signal_ce_ltp', 0.0),
+                "signal_pe_ltp": bot_state.get('signal_pe_ltp', 0.0),
                 "agent_wave_lock": getattr(getattr(self, 'strategy_agent', None), 'wave_lock', None),
                 "agent_last_trade_side": getattr(getattr(self, 'strategy_agent', None), 'last_trade_side', None),
                 "timestamp": datetime.now(timezone.utc).isoformat()
@@ -616,13 +1065,20 @@ class TradingBot:
         """Update SL values - initial fixed SL then trails profit using step-based method"""
         if not self.current_position:
             return
+
+        # Always set initial fixed stoploss if enabled, even if trailing is disabled.
+        initial_sl = config.get('initial_stoploss', 0)
+        if initial_sl > 0 and self.trailing_sl is None:
+            self.trailing_sl = self.entry_price - initial_sl
+            bot_state['trailing_sl'] = self.trailing_sl
+            logger.info(f"[SL] Initial SL set: {self.trailing_sl:.2f} ({initial_sl} pts below entry)")
         
         # Check if trailing is completely disabled
         trail_start = config.get('trail_start_profit', 0)
         trail_step = config.get('trail_step', 0)
         
         if trail_start == 0 or trail_step == 0:
-            # Trailing disabled - don't set any SL
+            # Trailing disabled - initial SL may still be active
             return
         
         profit_points = current_ltp - self.entry_price
@@ -631,15 +1087,7 @@ class TradingBot:
         if profit_points > self.highest_profit:
             self.highest_profit = profit_points
         
-        # Step 1: Set initial fixed stoploss (if enabled)
-        initial_sl = config.get('initial_stoploss', 0)
-        if initial_sl > 0 and self.trailing_sl is None:
-            self.trailing_sl = self.entry_price - initial_sl
-            bot_state['trailing_sl'] = self.trailing_sl
-            logger.info(f"[SL] Initial SL set: {self.trailing_sl:.2f} ({initial_sl} pts below entry)")
-            return
-        
-        # Step 2: Start trailing SL after reaching trail_start_profit
+        # Start trailing SL after reaching trail_start_profit
         
         # Only start trailing after profit reaches trail_start_profit
         if profit_points < trail_start:
@@ -800,8 +1248,59 @@ class TradingBot:
         await self.enter_position(option_type, atm_strike, index_ltp)
         self.last_trade_time = datetime.now()
         return exited
+
+    async def process_agent_action_on_close_fixed_contract(
+        self,
+        action: AgentAction,
+        index_ltp: float,
+        *,
+        strike: int,
+        expiry: str,
+        security_id: str,
+    ) -> bool:
+        """Same as process_agent_action_on_close, but uses a fixed contract."""
+        if action == AgentAction.HOLD:
+            return False
+
+        index_name = config['selected_index']
+        index_config = get_index_config(index_name)
+        qty = config['order_qty'] * index_config['lot_size']
+
+        if action == AgentAction.EXIT:
+            if not self.current_position:
+                return False
+            exit_price = bot_state['current_option_ltp']
+            pnl = (exit_price - self.entry_price) * qty
+            logger.info(f"[AGENT] EXIT | Reason=AgentDecision | P&L=₹{pnl:.2f}")
+            await self.close_position(exit_price, pnl, "Agent Exit")
+            return True
+
+        if self.current_position:
+            return False
+
+        if not can_take_new_trade():
+            return False
+
+        if bot_state['daily_trades'] >= config['max_trades_per_day']:
+            logger.info(f"[AGENT] Entry blocked - max daily trades reached ({config['max_trades_per_day']})")
+            return False
+
+        option_type = None
+        if action == AgentAction.ENTER_CE:
+            option_type = 'CE'
+        elif action == AgentAction.ENTER_PE:
+            option_type = 'PE'
+        else:
+            return False
+
+        logger.info(
+            f"[AGENT] ENTER {option_type} (fixed contract) | Index={index_name} | IndexLTP={index_ltp:.2f} | Strike={strike} | Expiry={expiry}"
+        )
+        await self.enter_position(option_type, int(strike), index_ltp, expiry_override=str(expiry), security_id_override=str(security_id))
+        self.last_trade_time = datetime.now()
+        return False
     
-    async def enter_position(self, option_type: str, strike: int, index_ltp: float):
+    async def enter_position(self, option_type: str, strike: int, index_ltp: float, *, expiry_override: str | None = None, security_id_override: str | None = None):
         """Enter a new position with market validation"""
         # CRITICAL: Double-check market is open before entering
         if not is_market_open():
@@ -831,7 +1330,7 @@ class TradingBot:
         trade_id = f"T{datetime.now().strftime('%Y%m%d%H%M%S')}"
         
         # Get expiry
-        expiry = await self.dhan.get_nearest_expiry(index_name) if self.dhan else None
+        expiry = str(expiry_override) if expiry_override else (await self.dhan.get_nearest_expiry(index_name) if self.dhan else None)
         if not expiry:
             ist = get_ist_time()
             expiry_day = index_config['expiry_day']
@@ -847,7 +1346,7 @@ class TradingBot:
         # Get real entry price
         if self.dhan:
             try:
-                security_id = await self.dhan.get_atm_option_security_id(index_name, strike, option_type, expiry)
+                security_id = str(security_id_override) if security_id_override else await self.dhan.get_atm_option_security_id(index_name, strike, option_type, expiry)
                 
                 if security_id:
                     option_ltp = await self.dhan.get_option_ltp(

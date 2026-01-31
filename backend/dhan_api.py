@@ -92,6 +92,50 @@ class DhanAPI:
             logger.error(f"Error fetching combined quote: {e}")
         
         return index_ltp, option_ltp
+
+    def get_index_and_options_ltp(self, index_name: str, option_security_ids: list[int]) -> tuple[float, dict[int, float]]:
+        """Get Index LTP and multiple option LTPs in a single API call.
+
+        Returns: (index_ltp, {security_id: ltp})
+        """
+        index_ltp = 0.0
+        option_ltps: dict[int, float] = {}
+
+        try:
+            if not option_security_ids:
+                return float(self.get_index_ltp(index_name)), {}
+
+            index_config = get_index_config(index_name)
+            security_id = int(index_config["security_id"])
+            segment = str(index_config["exchange_segment"])
+            fno_segment = str(index_config.get("fno_segment", "NSE_FNO"))
+
+            ids = [int(x) for x in option_security_ids if int(x) > 0]
+            response = self.dhan.quote_data({
+                segment: [security_id],
+                fno_segment: ids,
+            })
+
+            if response and response.get('status') == 'success':
+                data = response.get('data', {})
+                if isinstance(data, dict) and 'data' in data:
+                    data = data.get('data', {})
+
+                idx_data = data.get(segment, {}).get(str(security_id), {})
+                if idx_data:
+                    index_ltp = float(idx_data.get('last_price', 0) or 0)
+
+                fno_map = data.get(fno_segment, {})
+                if isinstance(fno_map, dict):
+                    for sid in ids:
+                        o = fno_map.get(str(sid), {})
+                        if o:
+                            ltp = float(o.get('last_price', 0) or 0)
+                            option_ltps[sid] = ltp
+        except Exception as e:
+            logger.error(f"Error fetching combined multi-option quote: {e}")
+
+        return float(index_ltp or 0.0), option_ltps
     
     async def get_option_chain(self, index_name: str = "NIFTY", expiry: str = None, force_refresh: bool = False) -> dict:
         """Get option chain with caching"""
