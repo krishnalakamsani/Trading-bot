@@ -78,6 +78,12 @@ config = {
     "trade_only_on_flip": False,  # Only trade on SuperTrend direction change
     "risk_per_trade": 0,  # Risk amount per trade (0 = disabled, uses fixed qty)
 
+    # Market-hours overrides
+    # Some exchanges occasionally run special sessions on weekends/holidays.
+    # When enabled, market-hour checks will ignore weekday restriction and only
+    # apply the time window rules.
+    "allow_weekend_trading": False,
+
     # Testing utilities
     # When enabled, the bot loop will run outside market hours and simulate LTPs.
 }

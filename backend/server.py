@@ -246,6 +246,12 @@ async def get_strategy_status():
     return bot_service.get_strategy_status()
 
 
+@api_router.get("/debug/quotes")
+async def debug_quotes():
+    """One-shot broker quote snapshot for debugging CE/PE LTP fetch."""
+    return await bot_service.debug_quotes()
+
+
 @api_router.post("/backtest/run")
 async def run_backtest_endpoint(req: BacktestRequest):
     """Run a candle replay backtest (no live orders)."""

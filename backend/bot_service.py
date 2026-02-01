@@ -60,7 +60,8 @@ def get_bot_status() -> dict:
         "market_details": {
             "is_weekday": is_weekday,
             "current_time_ist": ist.strftime('%H:%M:%S'),
-            "trading_hours": "09:15 - 15:30 IST"
+            "trading_hours": "09:15 - 15:30 IST",
+            "allow_weekend_trading": bool(config.get('allow_weekend_trading', False)),
         },
         "connection_status": "connected" if config['dhan_access_token'] else "disconnected",
         "daily_max_loss_triggered": bot_state['daily_max_loss_triggered'],
@@ -101,6 +102,164 @@ def get_market_data() -> dict:
         "selected_index": config['selected_index'],
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+async def debug_quotes() -> dict:
+    """One-shot quote fetch for troubleshooting live option prices.
+
+    Returns a filtered snapshot:
+    - Index + option security IDs used
+    - Parsed last_price mapping for CE/PE
+    - Raw (filtered) broker payload for those IDs
+    """
+    from utils import get_ist_time, is_market_open
+
+    index_name = str(config.get('selected_index') or 'NIFTY').upper()
+    ist = get_ist_time()
+
+    bot = get_trading_bot()
+    if not getattr(bot, 'dhan', None):
+        try:
+            ok = bot.initialize_dhan()
+        except Exception:
+            ok = False
+        if not ok:
+            return {
+                "status": "error",
+                "message": "Dhan API not initialized. Please set dhan_access_token and dhan_client_id.",
+                "meta": {
+                    "index_name": index_name,
+                    "current_time_ist": ist.strftime('%H:%M:%S'),
+                    "market_open": bool(is_market_open()),
+                },
+            }
+
+    try:
+        idx_cfg = get_index_config(index_name)
+        segment = str(idx_cfg.get('exchange_segment') or 'IDX_I')
+        fno_segment = str(idx_cfg.get('fno_segment') or 'NSE_FNO')
+        index_security_id = int(idx_cfg.get('security_id') or 0)
+
+        index_ltp = float(bot.dhan.get_index_ltp(index_name) or 0.0)
+        if not index_ltp or index_ltp <= 0:
+            return {
+                "status": "error",
+                "message": "Index LTP returned 0; cannot select fixed ATM contracts.",
+                "meta": {
+                    "index_name": index_name,
+                    "segment": segment,
+                    "index_security_id": index_security_id,
+                    "current_time_ist": ist.strftime('%H:%M:%S'),
+                    "market_open": bool(is_market_open()),
+                },
+            }
+
+        # Ensure fixed contracts exist (strike/expiry/security IDs)
+        try:
+            fixed_ready = await bot._ensure_fixed_option_contract(index_name, float(index_ltp))
+        except Exception:
+            fixed_ready = False
+
+        ce_sid = bot_state.get('fixed_ce_security_id')
+        pe_sid = bot_state.get('fixed_pe_security_id')
+        ids: list[int] = []
+        for x in (ce_sid, pe_sid):
+            if x:
+                try:
+                    ids.append(int(x))
+                except Exception:
+                    pass
+
+        if not fixed_ready or not ids:
+            return {
+                "status": "error",
+                "message": "Fixed option contracts are not ready (missing CE/PE security IDs).",
+                "meta": {
+                    "index_name": index_name,
+                    "index_ltp": index_ltp,
+                    "fixed_ready": bool(fixed_ready),
+                    "fixed_option_strike": bot_state.get('fixed_option_strike'),
+                    "fixed_option_expiry": bot_state.get('fixed_option_expiry'),
+                    "fixed_ce_security_id": ce_sid,
+                    "fixed_pe_security_id": pe_sid,
+                    "current_time_ist": ist.strftime('%H:%M:%S'),
+                    "market_open": bool(is_market_open()),
+                },
+            }
+
+        # Perform a single broker quote call and parse only required fields.
+        response = bot.dhan.dhan.quote_data({
+            segment: [index_security_id],
+            fno_segment: ids,
+        })
+
+        data = (response or {}).get('data', {}) if isinstance(response, dict) else {}
+        if isinstance(data, dict) and 'data' in data:
+            data = data.get('data', {})
+
+        idx_data = data.get(segment, {}).get(str(index_security_id), {}) if isinstance(data, dict) else {}
+        parsed_index_ltp = float((idx_data or {}).get('last_price', 0) or 0)
+        if parsed_index_ltp > 0:
+            index_ltp = parsed_index_ltp
+
+        fno_map = data.get(fno_segment, {}) if isinstance(data, dict) else {}
+        option_ltps: dict[int, float] = {}
+        raw_options: dict[str, dict] = {}
+        if isinstance(fno_map, dict):
+            for sid in ids:
+                entry = fno_map.get(str(sid), {}) or {}
+                if isinstance(entry, dict):
+                    option_ltps[sid] = float(entry.get('last_price', 0) or 0)
+                    raw_options[str(sid)] = {
+                        "last_price": entry.get('last_price', 0),
+                        "ohlc": entry.get('ohlc'),
+                        "volume": entry.get('volume'),
+                        "oi": entry.get('oi'),
+                        "timestamp": entry.get('timestamp') or entry.get('last_traded_time'),
+                    }
+
+        missing = [sid for sid in ids if sid not in option_ltps]
+        zero = [sid for sid, v in option_ltps.items() if not v or v <= 0]
+
+        return {
+            "status": "success",
+            "meta": {
+                "index_name": index_name,
+                "current_time_ist": ist.strftime('%H:%M:%S'),
+                "market_open": bool(is_market_open()),
+                "allow_weekend_trading": bool(config.get('allow_weekend_trading', False)),
+                "segment": segment,
+                "fno_segment": fno_segment,
+                "index_security_id": index_security_id,
+                "fixed_option_strike": bot_state.get('fixed_option_strike'),
+                "fixed_option_expiry": bot_state.get('fixed_option_expiry'),
+                "fixed_ce_security_id": ce_sid,
+                "fixed_pe_security_id": pe_sid,
+                "missing": missing,
+                "zero": zero,
+                "broker_status": (response or {}).get('status') if isinstance(response, dict) else None,
+            },
+            "quotes": {
+                "index_ltp": float(index_ltp or 0.0),
+                "option_ltps": option_ltps,
+                "bot_state_signal_ce_ltp": bot_state.get('signal_ce_ltp', 0.0),
+                "bot_state_signal_pe_ltp": bot_state.get('signal_pe_ltp', 0.0),
+            },
+            "raw": {
+                "options": raw_options,
+            },
+        }
+    except Exception as e:
+        logger.exception("[DEBUG] debug_quotes failed")
+        return {
+            "status": "error",
+            "message": f"debug_quotes failed: {e}",
+            "meta": {
+                "index_name": index_name,
+                "current_time_ist": ist.strftime('%H:%M:%S'),
+                "market_open": bool(is_market_open()),
+            },
+        }
 
 
 def get_position() -> dict:
@@ -181,6 +340,9 @@ def get_config() -> dict:
         "trail_step": config['trail_step'],
         "target_points": config['target_points'],
         "risk_per_trade": config.get('risk_per_trade', 0),
+
+        # Market-hours overrides
+        "allow_weekend_trading": bool(config.get('allow_weekend_trading', False)),
         # Indicator Settings (SuperTrend only)
         "supertrend_period": config.get('supertrend_period', 7),
         "supertrend_multiplier": config.get('supertrend_multiplier', 4),
@@ -238,6 +400,11 @@ async def update_config_values(updates: dict) -> dict:
         config['trail_start_profit'] = float(updates['trail_start_profit'])
         updated_fields.append('trail_start_profit')
         logger.info(f"[CONFIG] Trail start profit changed to: {config['trail_start_profit']} pts")
+
+    if updates.get('allow_weekend_trading') is not None:
+        config['allow_weekend_trading'] = bool(updates['allow_weekend_trading'])
+        updated_fields.append('allow_weekend_trading')
+        logger.warning(f"[CONFIG] allow_weekend_trading set to: {config['allow_weekend_trading']}")
         
     if updates.get('trail_step') is not None:
         config['trail_step'] = float(updates['trail_step'])

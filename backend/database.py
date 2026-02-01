@@ -97,7 +97,7 @@ async def load_config():
                         elif key in ['daily_max_loss', 'initial_stoploss', 'max_loss_per_trade', 'trail_start_profit', 'trail_step', 'target_points', 'risk_per_trade', 'supertrend_multiplier', 'agent_adx_min', 'agent_wave_reset_macd_abs']:
                             config[key] = float(value)
                         # Boolean fields
-                        elif key in ['trade_only_on_flip', 'persist_agent_state']:
+                        elif key in ['trade_only_on_flip', 'persist_agent_state', 'allow_weekend_trading']:
                             config[key] = value.lower() in ('true', '1', 'yes')
                         else:
                             config[key] = value

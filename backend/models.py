@@ -19,6 +19,9 @@ class ConfigUpdate(BaseModel):
     min_trade_gap: Optional[int] = None  # Minimum seconds between trades
     trade_only_on_flip: Optional[bool] = None  # Only trade on SuperTrend flip
 
+    # Market-hours overrides (special sessions)
+    allow_weekend_trading: Optional[bool] = None
+
     # Testing utilities
     # bypass_market_hours removed: bot always fetches data when running; entries are gated by time window.
 

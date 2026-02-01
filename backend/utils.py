@@ -10,9 +10,16 @@ def get_ist_time():
 def is_market_open():
     """Check if market is open (9:15 AM - 3:30 PM IST, Monday-Friday)"""
     ist = get_ist_time()
+
+    # Optional override for special sessions (e.g., weekend trading days)
+    try:
+        from config import config
+        allow_weekend = bool(config.get('allow_weekend_trading', False))
+    except Exception:
+        allow_weekend = False
     
     # Check if it's a weekday (Monday=0 to Friday=4, Saturday=5, Sunday=6)
-    if ist.weekday() >= 5:  # Saturday or Sunday
+    if ist.weekday() >= 5 and not allow_weekend:  # Saturday or Sunday
         return False
     
     market_open = ist.replace(hour=9, minute=15, second=0, microsecond=0)
@@ -22,9 +29,16 @@ def is_market_open():
 def can_take_new_trade():
     """Check if new trades are allowed (09:25 AM - 3:10 PM IST, weekday only)"""
     ist = get_ist_time()
+
+    # Optional override for special sessions (e.g., weekend trading days)
+    try:
+        from config import config
+        allow_weekend = bool(config.get('allow_weekend_trading', False))
+    except Exception:
+        allow_weekend = False
     
     # Check if it's a weekday
-    if ist.weekday() >= 5:  # Saturday or Sunday
+    if ist.weekday() >= 5 and not allow_weekend:  # Saturday or Sunday
         return False
     
     start_time = ist.replace(hour=9, minute=25, second=0, microsecond=0)
@@ -34,9 +48,16 @@ def can_take_new_trade():
 def should_force_squareoff():
     """Check if it's time to force square off (3:25 PM IST, weekday only)"""
     ist = get_ist_time()
+
+    # Optional override for special sessions (e.g., weekend trading days)
+    try:
+        from config import config
+        allow_weekend = bool(config.get('allow_weekend_trading', False))
+    except Exception:
+        allow_weekend = False
     
     # Check if it's a weekday
-    if ist.weekday() >= 5:  # Saturday or Sunday
+    if ist.weekday() >= 5 and not allow_weekend:  # Saturday or Sunday
         return False
     
     squareoff_time = ist.replace(hour=15, minute=25, second=0, microsecond=0)
