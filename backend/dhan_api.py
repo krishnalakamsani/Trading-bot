@@ -411,10 +411,17 @@ class DhanAPI:
                         data = data.get('data', {})
                     
                     oc_data = data.get('oc', {})
-                    strike_key = f"{strike}.000000"
-                    strike_data = oc_data.get(strike_key, {})
-                    
-                    if strike_data:
+                    strike_keys = [
+                        f"{strike}.000000",
+                        f"{strike}.0",
+                        str(strike),
+                        str(float(strike)),
+                    ]
+                    for strike_key in strike_keys:
+                        strike_data = oc_data.get(str(strike_key), {})
+                        if not strike_data:
+                            continue
+
                         opt_key = 'ce' if option_type.upper() == 'CE' else 'pe'
                         opt_data = strike_data.get(opt_key, {})
                         ltp = opt_data.get('last_price', 0)

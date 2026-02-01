@@ -263,6 +263,33 @@ async def debug_quotes() -> dict:
                 if isinstance(entry2, dict):
                     option_ltps_options_only[sid] = float(entry2.get('last_price', 0) or 0)
 
+        # Option-chain-derived prices (uses cached option chain when available)
+        option_ltps_chain: dict[int, float] = {}
+        fixed_strike = bot_state.get('fixed_option_strike')
+        fixed_expiry = bot_state.get('fixed_option_expiry')
+        if fixed_strike and fixed_expiry:
+            try:
+                await bot.dhan.get_option_chain(index_name=index_name, expiry=str(fixed_expiry))
+            except Exception:
+                pass
+            for sid, opt_type in ((ce_sid, 'CE'), (pe_sid, 'PE')):
+                if not sid:
+                    continue
+                try:
+                    chain_ltp = await bot.dhan.get_option_ltp(
+                        str(sid),
+                        strike=int(fixed_strike),
+                        option_type=opt_type,
+                        expiry=str(fixed_expiry),
+                        index_name=index_name,
+                    )
+                    try:
+                        option_ltps_chain[int(sid)] = float(chain_ltp or 0.0)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
         return {
             "status": "success",
             "meta": {
@@ -290,6 +317,7 @@ async def debug_quotes() -> dict:
                 "index_ltp": float(index_ltp or 0.0),
                 "option_ltps": option_ltps,
                 "option_ltps_options_only": option_ltps_options_only,
+                "option_ltps_chain": option_ltps_chain,
                 "bot_state_index_ltp": float(bot_state.get('index_ltp') or 0.0),
                 "bot_state_signal_ce_ltp": bot_state.get('signal_ce_ltp', 0.0),
                 "bot_state_signal_pe_ltp": bot_state.get('signal_pe_ltp', 0.0),

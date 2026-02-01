@@ -455,13 +455,38 @@ class TradingBot:
                             if idx2 and idx2 > 0:
                                 bot_state['index_ltp'] = float(idx2)
 
+                            fixed_strike = bot_state.get('fixed_option_strike')
+                            fixed_expiry = bot_state.get('fixed_option_expiry')
+
                             if ce_sid:
                                 ce_val = option_ltps.get(int(ce_sid), 0.0)
+                                if (not ce_val or ce_val <= 0) and fixed_strike and fixed_expiry:
+                                    try:
+                                        ce_val = await self.dhan.get_option_ltp(
+                                            ce_sid,
+                                            strike=int(fixed_strike),
+                                            option_type='CE',
+                                            expiry=str(fixed_expiry),
+                                            index_name=index_name,
+                                        )
+                                    except Exception:
+                                        pass
                                 if ce_val and ce_val > 0:
                                     ce_val = round(float(ce_val) / 0.05) * 0.05
                                     bot_state['signal_ce_ltp'] = round(float(ce_val), 2)
                             if pe_sid:
                                 pe_val = option_ltps.get(int(pe_sid), 0.0)
+                                if (not pe_val or pe_val <= 0) and fixed_strike and fixed_expiry:
+                                    try:
+                                        pe_val = await self.dhan.get_option_ltp(
+                                            pe_sid,
+                                            strike=int(fixed_strike),
+                                            option_type='PE',
+                                            expiry=str(fixed_expiry),
+                                            index_name=index_name,
+                                        )
+                                    except Exception:
+                                        pass
                                 if pe_val and pe_val > 0:
                                     pe_val = round(float(pe_val) / 0.05) * 0.05
                                     bot_state['signal_pe_ltp'] = round(float(pe_val), 2)
@@ -473,6 +498,19 @@ class TradingBot:
                                     try:
                                         pos_sid_int = int(pos_sid)
                                         pos_ltp = option_ltps.get(pos_sid_int, 0.0)
+                                        if (not pos_ltp or pos_ltp <= 0) and fixed_strike and fixed_expiry:
+                                            pos_type = str(self.current_position.get('option_type') or '').upper()
+                                            if pos_type in ('CE', 'PE'):
+                                                try:
+                                                    pos_ltp = await self.dhan.get_option_ltp(
+                                                        pos_sid,
+                                                        strike=int(fixed_strike),
+                                                        option_type=pos_type,
+                                                        expiry=str(fixed_expiry),
+                                                        index_name=index_name,
+                                                    )
+                                                except Exception:
+                                                    pass
                                         if pos_ltp and pos_ltp > 0:
                                             pos_ltp = round(float(pos_ltp) / 0.05) * 0.05
                                             bot_state['current_option_ltp'] = round(float(pos_ltp), 2)
