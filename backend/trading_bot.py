@@ -394,8 +394,8 @@ class TradingBot:
         while self.running:
             try:
                 index_name = config['selected_index']
-                # Requirement: build 5-second option candles for CE/PE
-                candle_interval = 5
+                # Build option candles using the user-selected timeframe.
+                candle_interval = int(config.get('candle_interval', 5) or 5)
                 bot_state['candle_interval'] = candle_interval
                 
                 # Check daily reset (9:15 AM IST)

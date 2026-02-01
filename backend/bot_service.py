@@ -13,7 +13,7 @@ _trading_bot = None
 
 # Throttle market-data refresh for polling callers.
 _last_market_refresh_ts = 0.0
-_market_refresh_interval_sec = 2.0
+_market_refresh_interval_sec = 1.0
 
 def get_trading_bot():
     """Get or create the trading bot instance"""
@@ -509,7 +509,7 @@ def get_config() -> dict:
         "mode": bot_state['mode'],
         # Index & Timeframe
         "selected_index": config['selected_index'],
-        "candle_interval": int(bot_state.get('candle_interval', 5) or 5),
+        "candle_interval": int(config.get('candle_interval', 5) or 5),
         "lot_size": index_config['lot_size'],
         "strike_interval": index_config['strike_interval'],
         "expiry_type": index_config.get('expiry_type', 'weekly'),
@@ -676,6 +676,7 @@ async def update_config_values(updates: dict) -> dict:
         new_interval = int(updates['candle_interval'])
         if new_interval in valid_intervals:
             config['candle_interval'] = new_interval
+            bot_state['candle_interval'] = new_interval
             updated_fields.append('candle_interval')
             logger.info(f"[CONFIG] Candle interval changed to: {new_interval}s")
             # Reset indicator when interval changes

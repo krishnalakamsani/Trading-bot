@@ -19,6 +19,12 @@ class DhanAPI:
         self._option_chain_cache_time = {}
         self._cache_duration = 60  # Default cache for 60 seconds
         self._position_cache_duration = 10  # Shorter cache when position is open
+        # When using option-chain as an LTP source, refresh it more frequently.
+        # Kept conservative to avoid rate limits.
+        try:
+            self._ltp_chain_refresh_sec = max(1, int(os.getenv("DHAN_OPTION_CHAIN_LTP_REFRESH_SEC", "5")))
+        except Exception:
+            self._ltp_chain_refresh_sec = 5
 
         # Optional diagnostics (OFF by default).
         # Enable via env: DHAN_DEBUG_QUOTES=1 (optionally set interval seconds)
@@ -403,11 +409,32 @@ class DhanAPI:
             
             # First try from cached option chain
             if strike and option_type:
-                # Ensure cache is populated and refreshed when stale.
+                # Ensure cache is populated and periodically refreshed.
                 # This is important when broker quote_data for options is unavailable.
                 if expiry:
+                    cache_key = f"{index_name}_{expiry}"
+                    cache_time = self._option_chain_cache_time.get(cache_key)
+                    refresh_sec = self._ltp_chain_refresh_sec
                     try:
-                        await self.get_option_chain(index_name=index_name, expiry=str(expiry), force_refresh=False)
+                        if bot_state.get('current_position'):
+                            refresh_sec = max(1, min(refresh_sec, 2))
+                    except Exception:
+                        pass
+
+                    try:
+                        should_refresh = (
+                            (not cache_time)
+                            or ((datetime.now() - cache_time).total_seconds() >= float(refresh_sec))
+                        )
+                    except Exception:
+                        should_refresh = True
+
+                    try:
+                        await self.get_option_chain(
+                            index_name=index_name,
+                            expiry=str(expiry),
+                            force_refresh=bool(should_refresh),
+                        )
                     except Exception:
                         pass
                 cache_key = f"{index_name}_{expiry}" if expiry else None
