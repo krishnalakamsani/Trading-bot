@@ -73,7 +73,10 @@ class SuperTrend:
         
         # Direction
         if len(self.supertrend_values) == 0:
-            direction = 1 if close > final_upper else -1
+            # Initialize direction using the common convention:
+            # if price is above the (lower) band, trend is bullish (GREEN).
+            # Using close > final_upper here would almost always mark the first value as bearish.
+            direction = 1 if close >= final_lower else -1
         else:
             prev = self.supertrend_values[-1]
             if prev['direction'] == 1:
