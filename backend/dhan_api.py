@@ -2,6 +2,8 @@
 from dhanhq import dhanhq
 from datetime import datetime, timezone, timedelta
 import logging
+import os
+import time
 from config import bot_state
 from indices import get_index_config
 
@@ -17,6 +19,15 @@ class DhanAPI:
         self._option_chain_cache_time = {}
         self._cache_duration = 60  # Default cache for 60 seconds
         self._position_cache_duration = 10  # Shorter cache when position is open
+
+        # Optional diagnostics (OFF by default).
+        # Enable via env: DHAN_DEBUG_QUOTES=1 (optionally set interval seconds)
+        self._debug_quotes = str(os.getenv("DHAN_DEBUG_QUOTES", "")).strip().lower() in ("1", "true", "yes", "on")
+        try:
+            self._debug_quotes_interval_sec = max(1, int(os.getenv("DHAN_DEBUG_QUOTES_INTERVAL_SEC", "10")))
+        except Exception:
+            self._debug_quotes_interval_sec = 10
+        self._last_debug_quotes_log_ts = 0.0
     
     def get_index_ltp(self, index_name: str = "NIFTY") -> float:
         """Get index spot LTP"""
@@ -101,6 +112,7 @@ class DhanAPI:
         index_ltp = 0.0
         option_ltps: dict[int, float] = {}
 
+        response = None
         try:
             if not option_security_ids:
                 return float(self.get_index_ltp(index_name)), {}
@@ -132,6 +144,29 @@ class DhanAPI:
                         if o:
                             ltp = float(o.get('last_price', 0) or 0)
                             option_ltps[sid] = ltp
+
+            # Diagnostics: when enabled, periodically log the quote mapping.
+            # Useful to confirm whether Dhan returned 0 vs. parsing/mapping issues.
+            if self._debug_quotes:
+                now_ts = time.time()
+                if (now_ts - float(self._last_debug_quotes_log_ts or 0.0)) >= float(self._debug_quotes_interval_sec):
+                    missing = [sid for sid in ids if sid not in option_ltps]
+                    zero = [sid for sid, v in option_ltps.items() if not v or v <= 0]
+                    # Log only if something looks wrong OR if explicitly enabled (still rate-limited).
+                    if missing or zero or (index_ltp and index_ltp > 0):
+                        opts_str = ", ".join([f"{sid}={option_ltps.get(sid, 0.0):.2f}" for sid in ids])
+                        logger.info(
+                            "[QUOTE][DBG] %s idx=%.2f seg=%s fno=%s opts={%s} missing=%s zero=%s status=%s",
+                            index_name,
+                            float(index_ltp or 0.0),
+                            segment,
+                            fno_segment,
+                            opts_str,
+                            missing,
+                            zero,
+                            (response or {}).get("status") if isinstance(response, dict) else None,
+                        )
+                    self._last_debug_quotes_log_ts = now_ts
         except Exception as e:
             logger.error(f"Error fetching combined multi-option quote: {e}")
 
