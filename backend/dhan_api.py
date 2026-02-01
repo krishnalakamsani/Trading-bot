@@ -403,6 +403,13 @@ class DhanAPI:
             
             # First try from cached option chain
             if strike and option_type:
+                # Ensure cache is populated and refreshed when stale.
+                # This is important when broker quote_data for options is unavailable.
+                if expiry:
+                    try:
+                        await self.get_option_chain(index_name=index_name, expiry=str(expiry), force_refresh=False)
+                    except Exception:
+                        pass
                 cache_key = f"{index_name}_{expiry}" if expiry else None
                 if cache_key and self._option_chain_cache.get(cache_key):
                     chain = self._option_chain_cache[cache_key]

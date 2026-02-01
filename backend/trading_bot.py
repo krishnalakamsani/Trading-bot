@@ -217,7 +217,7 @@ class TradingBot:
         ist = get_ist_time()
 
         # Weekday-only entries
-        if ist.weekday() >= 5:
+        if ist.weekday() >= 5 and not bool(config.get('allow_weekend_trading', False)):
             return False
 
         current_time = ist.time()
